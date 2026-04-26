@@ -11,6 +11,7 @@ PASSWORD = os.environ.get("APP_PASSWORD", "1234")
 DB = "events.db"
 
 TAGS = ["撮影会", "通院", "生理", "デート", "飲み会", "邂逅"]
+OWNERS = ["まき", "亮太"]
 
 
 def init_db():
@@ -25,16 +26,19 @@ def init_db():
             tag TEXT,
             location TEXT,
             memo TEXT,
-            url TEXT
+            url TEXT,
+            owner TEXT DEFAULT 'まき'
         )
     """)
 
-    # 既存DB対策：足りない列があれば追加
     cur.execute("PRAGMA table_info(events)")
     cols = [c[1] for c in cur.fetchall()]
 
     if "location" not in cols:
         cur.execute("ALTER TABLE events ADD COLUMN location TEXT")
+
+    if "owner" not in cols:
+        cur.execute("ALTER TABLE events ADD COLUMN owner TEXT DEFAULT 'まき'")
 
     conn.commit()
     conn.close()
@@ -55,7 +59,7 @@ def get_month_events(year, month):
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, date, title, tag, location, memo, url
+        SELECT id, date, title, tag, location, memo, url, owner
         FROM events
         WHERE date BETWEEN ? AND ?
         ORDER BY date ASC, id ASC
@@ -69,7 +73,7 @@ def get_event(event_id):
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, date, title, tag, location, memo, url
+        SELECT id, date, title, tag, location, memo, url, owner
         FROM events
         WHERE id = ?
     """, (event_id,))
@@ -123,8 +127,15 @@ def calendar_view():
     rows = get_month_events(year, month)
 
     events_by_date = {}
+    maki_events = []
+    ryota_events = []
+
     for e in rows:
         events_by_date.setdefault(e[1], []).append(e)
+        if e[7] == "亮太":
+            ryota_events.append(e)
+        else:
+            maki_events.append(e)
 
     cal = calendar.Calendar(firstweekday=6)
     weeks = cal.monthdatescalendar(year, month)
@@ -137,11 +148,14 @@ def calendar_view():
         weeks=weeks,
         events_by_date=events_by_date,
         events=rows,
+        maki_events=maki_events,
+        ryota_events=ryota_events,
         prev_year=prev_year,
         prev_month=prev_month,
         next_year=next_year,
         next_month=next_month,
-        tags=TAGS
+        tags=TAGS,
+        owners=OWNERS
     )
 
 
@@ -155,7 +169,8 @@ def new_event():
     return render_template_string(
         NEW_TEMPLATE,
         selected_date=selected_date,
-        tags=TAGS
+        tags=TAGS,
+        owners=OWNERS
     )
 
 
@@ -167,9 +182,13 @@ def add():
     event_date = request.form.get("date", "").strip()
     title = request.form.get("title", "").strip()
     tag = request.form.get("tag", "").strip()
+    owner = request.form.get("owner", "まき").strip()
     location = request.form.get("location", "").strip()
     memo = request.form.get("memo", "").strip()
     url = request.form.get("url", "").strip()
+
+    if owner not in OWNERS:
+        owner = "まき"
 
     if not event_date or not title:
         return redirect(url_for("calendar_view"))
@@ -177,9 +196,9 @@ def add():
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO events(date, title, tag, location, memo, url)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (event_date, title, tag, location, memo, url))
+        INSERT INTO events(date, title, tag, location, memo, url, owner)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (event_date, title, tag, location, memo, url, owner))
     conn.commit()
     conn.close()
 
@@ -199,17 +218,21 @@ def edit(event_id):
         event_date = request.form.get("date", "").strip()
         title = request.form.get("title", "").strip()
         tag = request.form.get("tag", "").strip()
+        owner = request.form.get("owner", "まき").strip()
         location = request.form.get("location", "").strip()
         memo = request.form.get("memo", "").strip()
         url = request.form.get("url", "").strip()
+
+        if owner not in OWNERS:
+            owner = "まき"
 
         conn = sqlite3.connect(DB)
         cur = conn.cursor()
         cur.execute("""
             UPDATE events
-            SET date=?, title=?, tag=?, location=?, memo=?, url=?
+            SET date=?, title=?, tag=?, location=?, memo=?, url=?, owner=?
             WHERE id=?
-        """, (event_date, title, tag, location, memo, url, event_id))
+        """, (event_date, title, tag, location, memo, url, owner, event_id))
         conn.commit()
         conn.close()
 
@@ -223,7 +246,7 @@ def edit(event_id):
     if not event:
         return redirect(url_for("calendar_view"))
 
-    return render_template_string(EDIT_TEMPLATE, event=event, tags=TAGS)
+    return render_template_string(EDIT_TEMPLATE, event=event, tags=TAGS, owners=OWNERS)
 
 
 @app.route("/delete/<int:event_id>", methods=["POST"])
@@ -252,6 +275,10 @@ BASE_CSS = """
   --soft-blue:#dbeafe;
   --green:#22c55e;
   --red-soft:#fee2e2;
+  --pink:#ec4899;
+  --pink-soft:#fce7f3;
+  --orange:#f97316;
+  --orange-soft:#ffedd5;
   --shadow:0 10px 28px rgba(15,23,42,.08);
 }
 * { box-sizing:border-box; }
@@ -402,6 +429,70 @@ textarea {
   font-weight:900;
   margin-top:4px;
 }
+.owner-buttons {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.owner-radio {
+  display:none;
+}
+.owner-label {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:46px;
+  border-radius:18px;
+  background:#f1f5f9;
+  color:#64748b;
+  font-size:15px;
+  font-weight:900;
+  cursor:pointer;
+}
+.owner-radio:checked + .owner-label.maki {
+  background:var(--pink-soft);
+  color:var(--pink);
+  box-shadow:inset 0 0 0 2px var(--pink);
+}
+.owner-radio:checked + .owner-label.ryota {
+  background:var(--orange-soft);
+  color:var(--orange);
+  box-shadow:inset 0 0 0 2px var(--orange);
+}
+.tabs {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  background:#f1f5f9;
+  padding:6px;
+  border-radius:20px;
+  margin-bottom:12px;
+}
+.tab-btn {
+  border:0;
+  height:40px;
+  border-radius:16px;
+  font-size:14px;
+  font-weight:900;
+  background:transparent;
+  color:#64748b;
+}
+.tab-btn.active.maki {
+  background:#fff;
+  color:var(--pink);
+  box-shadow:0 4px 12px rgba(236,72,153,.12);
+}
+.tab-btn.active.ryota {
+  background:#fff;
+  color:var(--orange);
+  box-shadow:0 4px 12px rgba(249,115,22,.12);
+}
+.tab-panel {
+  display:none;
+}
+.tab-panel.active {
+  display:block;
+}
 .event {
   background:#f8fafc;
   border:1px solid #eef2f7;
@@ -426,6 +517,12 @@ textarea {
   font-weight:900;
   line-height:1.35;
 }
+.tag-row {
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
 .tag {
   flex-shrink:0;
   background:#eef4ff;
@@ -434,6 +531,14 @@ textarea {
   padding:5px 9px;
   font-size:11px;
   font-weight:900;
+}
+.owner-tag.maki {
+  background:var(--pink-soft);
+  color:var(--pink);
+}
+.owner-tag.ryota {
+  background:var(--orange-soft);
+  color:var(--orange);
 }
 .event-memo {
   color:#64748b;
@@ -560,6 +665,48 @@ LOGIN_TEMPLATE = """
 """
 
 
+EVENT_CARD_TEMPLATE = """
+{% for id, event_date, title, tag, location, memo, url, owner in events %}
+  <div class="event">
+    <div class="event-head">
+      <div>
+        <div class="event-date">{{ event_date }}</div>
+        <div class="event-title">{{ title }}</div>
+      </div>
+
+      <div class="tag-row">
+        <div class="tag owner-tag {% if owner == '亮太' %}ryota{% else %}maki{% endif %}">
+          {{ owner or "まき" }}
+        </div>
+        {% if tag %}
+          <div class="tag">{{ tag }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if location %}
+      <div class="event-memo">場所：{{ location }}</div>
+    {% endif %}
+
+    {% if memo %}
+      <div class="event-memo">{{ memo }}</div>
+    {% endif %}
+
+    {% if url %}
+      <a class="link" href="{{ url }}" target="_blank">URLを開く</a>
+    {% endif %}
+
+    <div class="event-actions">
+      <a class="small-btn edit-btn" href="/edit/{{ id }}">編集</a>
+      <form method="post" action="/delete/{{ id }}" style="flex:1;margin:0;" onsubmit="return confirm('削除しますか？');">
+        <button class="small-btn delete-btn" type="submit" style="width:100%;">削除</button>
+      </form>
+    </div>
+  </div>
+{% endfor %}
+"""
+
+
 CALENDAR_TEMPLATE = """
 <!doctype html>
 <html lang="ja">
@@ -616,6 +763,17 @@ CALENDAR_TEMPLATE = """
       </div>
 
       <div>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
+          <input class="owner-radio" type="radio" id="owner_maki_main" name="owner" value="まき" checked>
+          <label class="owner-label maki" for="owner_maki_main">まき</label>
+
+          <input class="owner-radio" type="radio" id="owner_ryota_main" name="owner" value="亮太">
+          <label class="owner-label ryota" for="owner_ryota_main">亮太</label>
+        </div>
+      </div>
+
+      <div>
         <label>タイトル</label>
         <input name="title" required>
       </div>
@@ -651,45 +809,48 @@ CALENDAR_TEMPLATE = """
   <section class="card">
     <h2 class="section-title">今月の予定</h2>
 
-    {% if not events %}
-      <div class="empty">予定はまだありません</div>
-    {% endif %}
+    <div class="tabs">
+      <button type="button" class="tab-btn active maki" onclick="showTab('maki')">まき</button>
+      <button type="button" class="tab-btn ryota" onclick="showTab('ryota')">亮太</button>
+    </div>
 
-    {% for id, event_date, title, tag, location, memo, url in events %}
-      <div class="event">
-        <div class="event-head">
-          <div>
-            <div class="event-date">{{ event_date }}</div>
-            <div class="event-title">{{ title }}</div>
-          </div>
-          {% if tag %}
-            <div class="tag">{{ tag }}</div>
-          {% endif %}
-        </div>
+    <div id="tab-maki" class="tab-panel active">
+      {% if not maki_events %}
+        <div class="empty">まきの予定はまだありません</div>
+      {% endif %}
+      """ + EVENT_CARD_TEMPLATE.replace("events", "maki_events") + """
+    </div>
 
-        {% if location %}
-          <div class="event-memo">場所：{{ location }}</div>
-        {% endif %}
-
-        {% if memo %}
-          <div class="event-memo">{{ memo }}</div>
-        {% endif %}
-
-        {% if url %}
-          <a class="link" href="{{ url }}" target="_blank">URLを開く</a>
-        {% endif %}
-
-        <div class="event-actions">
-          <a class="small-btn edit-btn" href="/edit/{{ id }}">編集</a>
-          <form method="post" action="/delete/{{ id }}" style="flex:1;margin:0;" onsubmit="return confirm('削除しますか？');">
-            <button class="small-btn delete-btn" type="submit" style="width:100%;">削除</button>
-          </form>
-        </div>
-      </div>
-    {% endfor %}
+    <div id="tab-ryota" class="tab-panel">
+      {% if not ryota_events %}
+        <div class="empty">亮太の予定はまだありません</div>
+      {% endif %}
+      """ + EVENT_CARD_TEMPLATE.replace("events", "ryota_events") + """
+    </div>
   </section>
 
 </div>
+
+<script>
+function showTab(name) {
+  const makiPanel = document.getElementById("tab-maki");
+  const ryotaPanel = document.getElementById("tab-ryota");
+  const buttons = document.querySelectorAll(".tab-btn");
+
+  makiPanel.classList.remove("active");
+  ryotaPanel.classList.remove("active");
+
+  buttons.forEach(btn => btn.classList.remove("active"));
+
+  if (name === "maki") {
+    makiPanel.classList.add("active");
+    document.querySelector(".tab-btn.maki").classList.add("active");
+  } else {
+    ryotaPanel.classList.add("active");
+    document.querySelector(".tab-btn.ryota").classList.add("active");
+  }
+}
+</script>
 </body>
 </html>
 """
@@ -713,6 +874,17 @@ NEW_TEMPLATE = """
       <div>
         <label>日付</label>
         <input name="date" type="date" value="{{ selected_date }}" required>
+      </div>
+
+      <div>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
+          <input class="owner-radio" type="radio" id="owner_maki_new" name="owner" value="まき" checked>
+          <label class="owner-label maki" for="owner_maki_new">まき</label>
+
+          <input class="owner-radio" type="radio" id="owner_ryota_new" name="owner" value="亮太">
+          <label class="owner-label ryota" for="owner_ryota_new">亮太</label>
+        </div>
       </div>
 
       <div>
@@ -773,6 +945,17 @@ EDIT_TEMPLATE = """
       <div>
         <label>日付</label>
         <input name="date" type="date" value="{{ event[1] }}" required>
+      </div>
+
+      <div>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
+          <input class="owner-radio" type="radio" id="owner_maki_edit" name="owner" value="まき" {% if event[7] != "亮太" %}checked{% endif %}>
+          <label class="owner-label maki" for="owner_maki_edit">まき</label>
+
+          <input class="owner-radio" type="radio" id="owner_ryota_edit" name="owner" value="亮太" {% if event[7] == "亮太" %}checked{% endif %}>
+          <label class="owner-label ryota" for="owner_ryota_edit">亮太</label>
+        </div>
       </div>
 
       <div>
