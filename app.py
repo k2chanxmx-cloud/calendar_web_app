@@ -662,6 +662,9 @@ LOGIN_TEMPLATE = """
 <meta charset="utf-8">
 <title>ログイン</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<link rel="apple-touch-icon" href="/static/icon.png">
+
 """ + BASE_CSS + """
 </head>
 <body>
@@ -1032,4 +1035,3 @@ EDIT_TEMPLATE = """
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
