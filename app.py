@@ -11,7 +11,7 @@ PASSWORD = os.environ.get("APP_PASSWORD", "1234")
 DB = "events.db"
 
 TAGS = ["撮影会", "通院", "生理", "デート", "飲み会", "邂逅"]
-OWNERS = ["まき", "亮太"]
+OWNERS = ["まき", "亮太", "二人"]
 
 
 def init_db():
@@ -129,11 +129,15 @@ def calendar_view():
     events_by_date = {}
     maki_events = []
     ryota_events = []
+    both_events = []
 
     for e in rows:
         events_by_date.setdefault(e[1], []).append(e)
+
         if e[7] == "亮太":
             ryota_events.append(e)
+        elif e[7] == "二人":
+            both_events.append(e)
         else:
             maki_events.append(e)
 
@@ -147,15 +151,14 @@ def calendar_view():
         today=today,
         weeks=weeks,
         events_by_date=events_by_date,
-        events=rows,
         maki_events=maki_events,
         ryota_events=ryota_events,
+        both_events=both_events,
         prev_year=prev_year,
         prev_month=prev_month,
         next_year=next_year,
         next_month=next_month,
-        tags=TAGS,
-        owners=OWNERS
+        tags=TAGS
     )
 
 
@@ -169,8 +172,7 @@ def new_event():
     return render_template_string(
         NEW_TEMPLATE,
         selected_date=selected_date,
-        tags=TAGS,
-        owners=OWNERS
+        tags=TAGS
     )
 
 
@@ -246,7 +248,7 @@ def edit(event_id):
     if not event:
         return redirect(url_for("calendar_view"))
 
-    return render_template_string(EDIT_TEMPLATE, event=event, tags=TAGS, owners=OWNERS)
+    return render_template_string(EDIT_TEMPLATE, event=event, tags=TAGS)
 
 
 @app.route("/delete/<int:event_id>", methods=["POST"])
@@ -279,6 +281,8 @@ BASE_CSS = """
   --pink-soft:#fce7f3;
   --orange:#f97316;
   --orange-soft:#ffedd5;
+  --purple:#8b5cf6;
+  --purple-soft:#ede9fe;
   --shadow:0 10px 28px rgba(15,23,42,.08);
 }
 * { box-sizing:border-box; }
@@ -431,8 +435,8 @@ textarea {
 }
 .owner-buttons {
   display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:8px;
 }
 .owner-radio {
   display:none;
@@ -459,9 +463,14 @@ textarea {
   color:var(--orange);
   box-shadow:inset 0 0 0 2px var(--orange);
 }
+.owner-radio:checked + .owner-label.both {
+  background:var(--purple-soft);
+  color:var(--purple);
+  box-shadow:inset 0 0 0 2px var(--purple);
+}
 .tabs {
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr 1fr 1fr;
   gap:8px;
   background:#f1f5f9;
   padding:6px;
@@ -486,6 +495,11 @@ textarea {
   background:#fff;
   color:var(--orange);
   box-shadow:0 4px 12px rgba(249,115,22,.12);
+}
+.tab-btn.active.both {
+  background:#fff;
+  color:var(--purple);
+  box-shadow:0 4px 12px rgba(139,92,246,.12);
 }
 .tab-panel {
   display:none;
@@ -539,6 +553,10 @@ textarea {
 .owner-tag.ryota {
   background:var(--orange-soft);
   color:var(--orange);
+}
+.owner-tag.both {
+  background:var(--purple-soft);
+  color:var(--purple);
 }
 .event-memo {
   color:#64748b;
@@ -666,7 +684,7 @@ LOGIN_TEMPLATE = """
 
 
 EVENT_CARD_TEMPLATE = """
-{% for id, event_date, title, tag, location, memo, url, owner in events %}
+{% for id, event_date, title, tag, location, memo, url, owner in event_list %}
   <div class="event">
     <div class="event-head">
       <div>
@@ -675,7 +693,7 @@ EVENT_CARD_TEMPLATE = """
       </div>
 
       <div class="tag-row">
-        <div class="tag owner-tag {% if owner == '亮太' %}ryota{% else %}maki{% endif %}">
+        <div class="tag owner-tag {% if owner == '亮太' %}ryota{% elif owner == '二人' %}both{% else %}maki{% endif %}">
           {{ owner or "まき" }}
         </div>
         {% if tag %}
@@ -770,6 +788,9 @@ CALENDAR_TEMPLATE = """
 
           <input class="owner-radio" type="radio" id="owner_ryota_main" name="owner" value="亮太">
           <label class="owner-label ryota" for="owner_ryota_main">亮太</label>
+
+          <input class="owner-radio" type="radio" id="owner_both_main" name="owner" value="二人">
+          <label class="owner-label both" for="owner_both_main">二人</label>
         </div>
       </div>
 
@@ -812,20 +833,31 @@ CALENDAR_TEMPLATE = """
     <div class="tabs">
       <button type="button" class="tab-btn active maki" onclick="showTab('maki')">まき</button>
       <button type="button" class="tab-btn ryota" onclick="showTab('ryota')">亮太</button>
+      <button type="button" class="tab-btn both" onclick="showTab('both')">二人</button>
     </div>
 
     <div id="tab-maki" class="tab-panel active">
       {% if not maki_events %}
         <div class="empty">まきの予定はまだありません</div>
       {% endif %}
-      """ + EVENT_CARD_TEMPLATE.replace("events", "maki_events") + """
+      {% set event_list = maki_events %}
+      """ + EVENT_CARD_TEMPLATE + """
     </div>
 
     <div id="tab-ryota" class="tab-panel">
       {% if not ryota_events %}
         <div class="empty">亮太の予定はまだありません</div>
       {% endif %}
-      """ + EVENT_CARD_TEMPLATE.replace("events", "ryota_events") + """
+      {% set event_list = ryota_events %}
+      """ + EVENT_CARD_TEMPLATE + """
+    </div>
+
+    <div id="tab-both" class="tab-panel">
+      {% if not both_events %}
+        <div class="empty">二人の予定はまだありません</div>
+      {% endif %}
+      {% set event_list = both_events %}
+      """ + EVENT_CARD_TEMPLATE + """
     </div>
   </section>
 
@@ -833,22 +865,16 @@ CALENDAR_TEMPLATE = """
 
 <script>
 function showTab(name) {
-  const makiPanel = document.getElementById("tab-maki");
-  const ryotaPanel = document.getElementById("tab-ryota");
-  const buttons = document.querySelectorAll(".tab-btn");
+  document.querySelectorAll(".tab-panel").forEach(panel => {
+    panel.classList.remove("active");
+  });
 
-  makiPanel.classList.remove("active");
-  ryotaPanel.classList.remove("active");
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.remove("active");
+  });
 
-  buttons.forEach(btn => btn.classList.remove("active"));
-
-  if (name === "maki") {
-    makiPanel.classList.add("active");
-    document.querySelector(".tab-btn.maki").classList.add("active");
-  } else {
-    ryotaPanel.classList.add("active");
-    document.querySelector(".tab-btn.ryota").classList.add("active");
-  }
+  document.getElementById("tab-" + name).classList.add("active");
+  document.querySelector(".tab-btn." + name).classList.add("active");
 }
 </script>
 </body>
@@ -884,6 +910,9 @@ NEW_TEMPLATE = """
 
           <input class="owner-radio" type="radio" id="owner_ryota_new" name="owner" value="亮太">
           <label class="owner-label ryota" for="owner_ryota_new">亮太</label>
+
+          <input class="owner-radio" type="radio" id="owner_both_new" name="owner" value="二人">
+          <label class="owner-label both" for="owner_both_new">二人</label>
         </div>
       </div>
 
@@ -950,11 +979,14 @@ EDIT_TEMPLATE = """
       <div>
         <label>誰の予定？</label>
         <div class="owner-buttons">
-          <input class="owner-radio" type="radio" id="owner_maki_edit" name="owner" value="まき" {% if event[7] != "亮太" %}checked{% endif %}>
+          <input class="owner-radio" type="radio" id="owner_maki_edit" name="owner" value="まき" {% if event[7] != "亮太" and event[7] != "二人" %}checked{% endif %}>
           <label class="owner-label maki" for="owner_maki_edit">まき</label>
 
           <input class="owner-radio" type="radio" id="owner_ryota_edit" name="owner" value="亮太" {% if event[7] == "亮太" %}checked{% endif %}>
           <label class="owner-label ryota" for="owner_ryota_edit">亮太</label>
+
+          <input class="owner-radio" type="radio" id="owner_both_edit" name="owner" value="二人" {% if event[7] == "二人" %}checked{% endif %}>
+          <label class="owner-label both" for="owner_both_edit">二人</label>
         </div>
       </div>
 
