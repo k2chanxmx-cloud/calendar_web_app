@@ -2,7 +2,6 @@ import os
 import sqlite3
 import calendar
 from datetime import date
-from html import escape
 from flask import Flask, request, redirect, session, render_template_string, url_for
 
 app = Flask(__name__)
@@ -11,21 +10,32 @@ app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret")
 PASSWORD = os.environ.get("APP_PASSWORD", "1234")
 DB = "events.db"
 
+TAGS = ["撮影会", "通院", "生理", "デート", "飲み会", "邂逅"]
+
 
 def init_db():
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
             title TEXT NOT NULL,
+            tag TEXT,
+            location TEXT,
             memo TEXT,
-            url TEXT,
-            image_url TEXT,
-            tag TEXT
+            url TEXT
         )
     """)
+
+    # 既存DB対策：足りない列があれば追加
+    cur.execute("PRAGMA table_info(events)")
+    cols = [c[1] for c in cur.fetchall()]
+
+    if "location" not in cols:
+        cur.execute("ALTER TABLE events ADD COLUMN location TEXT")
+
     conn.commit()
     conn.close()
 
@@ -45,7 +55,7 @@ def get_month_events(year, month):
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, date, title, memo, url, image_url, tag
+        SELECT id, date, title, tag, location, memo, url
         FROM events
         WHERE date BETWEEN ? AND ?
         ORDER BY date ASC, id ASC
@@ -59,7 +69,7 @@ def get_event(event_id):
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, date, title, memo, url, image_url, tag
+        SELECT id, date, title, tag, location, memo, url
         FROM events
         WHERE id = ?
     """, (event_id,))
@@ -130,7 +140,22 @@ def calendar_view():
         prev_year=prev_year,
         prev_month=prev_month,
         next_year=next_year,
-        next_month=next_month
+        next_month=next_month,
+        tags=TAGS
+    )
+
+
+@app.route("/new")
+def new_event():
+    if not login_required():
+        return redirect(url_for("login"))
+
+    selected_date = request.args.get("date", date.today().strftime("%Y-%m-%d"))
+
+    return render_template_string(
+        NEW_TEMPLATE,
+        selected_date=selected_date,
+        tags=TAGS
     )
 
 
@@ -141,10 +166,10 @@ def add():
 
     event_date = request.form.get("date", "").strip()
     title = request.form.get("title", "").strip()
+    tag = request.form.get("tag", "").strip()
+    location = request.form.get("location", "").strip()
     memo = request.form.get("memo", "").strip()
     url = request.form.get("url", "").strip()
-    image_url = request.form.get("image_url", "").strip()
-    tag = request.form.get("tag", "").strip()
 
     if not event_date or not title:
         return redirect(url_for("calendar_view"))
@@ -152,9 +177,9 @@ def add():
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO events(date, title, memo, url, image_url, tag)
+        INSERT INTO events(date, title, tag, location, memo, url)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (event_date, title, memo, url, image_url, tag))
+    """, (event_date, title, tag, location, memo, url))
     conn.commit()
     conn.close()
 
@@ -173,18 +198,18 @@ def edit(event_id):
     if request.method == "POST":
         event_date = request.form.get("date", "").strip()
         title = request.form.get("title", "").strip()
+        tag = request.form.get("tag", "").strip()
+        location = request.form.get("location", "").strip()
         memo = request.form.get("memo", "").strip()
         url = request.form.get("url", "").strip()
-        image_url = request.form.get("image_url", "").strip()
-        tag = request.form.get("tag", "").strip()
 
         conn = sqlite3.connect(DB)
         cur = conn.cursor()
         cur.execute("""
             UPDATE events
-            SET date=?, title=?, memo=?, url=?, image_url=?, tag=?
+            SET date=?, title=?, tag=?, location=?, memo=?, url=?
             WHERE id=?
-        """, (event_date, title, memo, url, image_url, tag, event_id))
+        """, (event_date, title, tag, location, memo, url, event_id))
         conn.commit()
         conn.close()
 
@@ -198,7 +223,7 @@ def edit(event_id):
     if not event:
         return redirect(url_for("calendar_view"))
 
-    return render_template_string(EDIT_TEMPLATE, event=event)
+    return render_template_string(EDIT_TEMPLATE, event=event, tags=TAGS)
 
 
 @app.route("/delete/<int:event_id>", methods=["POST"])
@@ -222,12 +247,10 @@ BASE_CSS = """
   --card:#ffffff;
   --text:#111827;
   --muted:#6b7280;
-  --line:#e5e7eb;
   --blue:#3b82f6;
   --blue2:#2563eb;
   --soft-blue:#dbeafe;
   --green:#22c55e;
-  --red:#ef4444;
   --red-soft:#fee2e2;
   --shadow:0 10px 28px rgba(15,23,42,.08);
 }
@@ -251,9 +274,7 @@ body {
   box-shadow:var(--shadow);
   margin-bottom:14px;
 }
-.header {
-  padding:20px 18px;
-}
+.header { padding:20px 18px; }
 .top-row {
   display:flex;
   justify-content:space-between;
@@ -263,7 +284,6 @@ body {
 .app-title {
   font-size:24px;
   font-weight:900;
-  letter-spacing:-.03em;
 }
 .logout {
   text-decoration:none;
@@ -313,6 +333,10 @@ body {
   font-weight:900;
   padding:4px 0 8px;
 }
+.day-link {
+  text-decoration:none;
+  color:inherit;
+}
 .day {
   min-height:52px;
   border-radius:17px;
@@ -323,9 +347,7 @@ body {
   font-weight:900;
   font-size:14px;
 }
-.day.other {
-  opacity:.28;
-}
+.day.other { opacity:.28; }
 .day.today {
   background:var(--green);
   color:#fff;
@@ -380,7 +402,6 @@ textarea {
   font-weight:900;
   margin-top:4px;
 }
-.btn:hover { background:var(--blue2); }
 .event {
   background:#f8fafc;
   border:1px solid #eef2f7;
@@ -461,6 +482,17 @@ textarea {
   color:#64748b;
   font-weight:800;
 }
+.back {
+  display:block;
+  text-align:center;
+  text-decoration:none;
+  color:#475569;
+  background:#f1f5f9;
+  border-radius:18px;
+  padding:13px;
+  font-weight:900;
+  margin-top:10px;
+}
 .login-wrap {
   min-height:100vh;
   display:flex;
@@ -496,22 +528,6 @@ textarea {
   font-weight:800;
   margin-bottom:12px;
 }
-.back {
-  display:block;
-  text-align:center;
-  text-decoration:none;
-  color:#475569;
-  background:#f1f5f9;
-  border-radius:18px;
-  padding:13px;
-  font-weight:900;
-  margin-top:10px;
-}
-@media (max-width:390px) {
-  .app { padding:10px; }
-  .day { min-height:46px; border-radius:14px; }
-  .month { font-size:20px; }
-}
 </style>
 """
 
@@ -534,7 +550,7 @@ LOGIN_TEMPLATE = """
       <div class="error">{{ error }}</div>
     {% endif %}
     <form method="post">
-      <input name="pw" type="password" placeholder="パスワード" autocomplete="current-password">
+      <input name="pw" type="password" placeholder="パスワード">
       <button class="btn" type="submit">ログイン</button>
     </form>
   </div>
@@ -549,7 +565,7 @@ CALENDAR_TEMPLATE = """
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>撮影会カレンダー</title>
+<title>共有カレンダー</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 """ + BASE_CSS + """
 </head>
@@ -578,12 +594,14 @@ CALENDAR_TEMPLATE = """
       <div class="week">
         {% for d in week %}
           {% set ds = d.strftime("%Y-%m-%d") %}
-          <div class="day {% if d.month != month %}other{% endif %} {% if d == today %}today{% endif %} {% if ds in events_by_date %}has{% endif %}">
-            {{ d.day }}
-            {% if ds in events_by_date %}
-              <span class="dot"></span>
-            {% endif %}
-          </div>
+          <a class="day-link" href="/new?date={{ ds }}">
+            <div class="day {% if d.month != month %}other{% endif %} {% if d == today %}today{% endif %} {% if ds in events_by_date %}has{% endif %}">
+              {{ d.day }}
+              {% if ds in events_by_date %}
+                <span class="dot"></span>
+              {% endif %}
+            </div>
+          </a>
         {% endfor %}
       </div>
     {% endfor %}
@@ -599,33 +617,31 @@ CALENDAR_TEMPLATE = """
 
       <div>
         <label>タイトル</label>
-        <input name="title" placeholder="例：Milk*Sugar撮影会" required>
+        <input name="title" required>
       </div>
 
       <div>
         <label>タグ</label>
         <select name="tag">
-          <option value="撮影会">撮影会</option>
-          <option value="イベント">イベント</option>
-          <option value="締切">締切</option>
-          <option value="予定">予定</option>
-          <option value="その他">その他</option>
+          {% for tag in tags %}
+            <option value="{{ tag }}">{{ tag }}</option>
+          {% endfor %}
         </select>
       </div>
 
       <div>
+        <label>場所</label>
+        <input name="location">
+      </div>
+
+      <div>
         <label>メモ</label>
-        <textarea name="memo" placeholder="場所・部数・申し込みメモなど"></textarea>
+        <textarea name="memo"></textarea>
       </div>
 
       <div>
-        <label>投稿URL</label>
-        <input name="url" placeholder="https://...">
-      </div>
-
-      <div>
-        <label>画像URL / スクショメモ</label>
-        <input name="image_url" placeholder="画像URLや「スクショ保存済み」など">
+        <label>URL</label>
+        <input name="url">
       </div>
 
       <button class="btn" type="submit">予定を追加</button>
@@ -639,7 +655,7 @@ CALENDAR_TEMPLATE = """
       <div class="empty">予定はまだありません</div>
     {% endif %}
 
-    {% for id, event_date, title, memo, url, image_url, tag in events %}
+    {% for id, event_date, title, tag, location, memo, url in events %}
       <div class="event">
         <div class="event-head">
           <div>
@@ -651,16 +667,16 @@ CALENDAR_TEMPLATE = """
           {% endif %}
         </div>
 
+        {% if location %}
+          <div class="event-memo">場所：{{ location }}</div>
+        {% endif %}
+
         {% if memo %}
           <div class="event-memo">{{ memo }}</div>
         {% endif %}
 
         {% if url %}
-          <a class="link" href="{{ url }}" target="_blank">投稿URLを開く</a>
-        {% endif %}
-
-        {% if image_url %}
-          <div class="event-memo">画像/スクショ：{{ image_url }}</div>
+          <a class="link" href="{{ url }}" target="_blank">URLを開く</a>
         {% endif %}
 
         <div class="event-actions">
@@ -673,6 +689,66 @@ CALENDAR_TEMPLATE = """
     {% endfor %}
   </section>
 
+</div>
+</body>
+</html>
+"""
+
+
+NEW_TEMPLATE = """
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>予定追加</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+""" + BASE_CSS + """
+</head>
+<body>
+<div class="app">
+  <section class="card">
+    <h1 class="section-title">予定追加</h1>
+
+    <form class="form-grid" action="/add" method="post">
+      <div>
+        <label>日付</label>
+        <input name="date" type="date" value="{{ selected_date }}" required>
+      </div>
+
+      <div>
+        <label>タイトル</label>
+        <input name="title" required>
+      </div>
+
+      <div>
+        <label>タグ</label>
+        <select name="tag">
+          {% for tag in tags %}
+            <option value="{{ tag }}">{{ tag }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label>場所</label>
+        <input name="location">
+      </div>
+
+      <div>
+        <label>メモ</label>
+        <textarea name="memo"></textarea>
+      </div>
+
+      <div>
+        <label>URL</label>
+        <input name="url">
+      </div>
+
+      <button class="btn" type="submit">予定を追加</button>
+    </form>
+
+    <a class="back" href="/calendar">戻る</a>
+  </section>
 </div>
 </body>
 </html>
@@ -707,25 +783,25 @@ EDIT_TEMPLATE = """
       <div>
         <label>タグ</label>
         <select name="tag">
-          {% for t in ["撮影会","イベント","締切","予定","その他"] %}
-            <option value="{{ t }}" {% if event[6] == t %}selected{% endif %}>{{ t }}</option>
+          {% for tag in tags %}
+            <option value="{{ tag }}" {% if event[3] == tag %}selected{% endif %}>{{ tag }}</option>
           {% endfor %}
         </select>
       </div>
 
       <div>
+        <label>場所</label>
+        <input name="location" value="{{ event[4] or '' }}">
+      </div>
+
+      <div>
         <label>メモ</label>
-        <textarea name="memo">{{ event[3] or "" }}</textarea>
+        <textarea name="memo">{{ event[5] or "" }}</textarea>
       </div>
 
       <div>
-        <label>投稿URL</label>
-        <input name="url" value="{{ event[4] or "" }}">
-      </div>
-
-      <div>
-        <label>画像URL / スクショメモ</label>
-        <input name="image_url" value="{{ event[5] or "" }}">
+        <label>URL</label>
+        <input name="url" value="{{ event[6] or '' }}">
       </div>
 
       <button class="btn" type="submit">更新する</button>
