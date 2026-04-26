@@ -36,6 +36,10 @@ def init_db():
     conn.close()
 
 
+# ★重要：Render / Gunicorn起動時にもDBを作成する
+init_db()
+
+
 def db_rows(year, month):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -172,7 +176,7 @@ def ocr_image(path):
     )
 
 
-@app.route("/")
+@app.route("/", methods=["GET", "HEAD"])
 def index():
     today = date.today()
 
@@ -278,8 +282,11 @@ def save():
     conn.commit()
     conn.close()
 
-    y, m, _ = event_date.split("-")
-    return redirect(url_for("index", year=int(y), month=int(m)))
+    try:
+        y, m, _ = event_date.split("-")
+        return redirect(url_for("index", year=int(y), month=int(m)))
+    except Exception:
+        return redirect(url_for("index"))
 
 
 @app.route("/delete/<int:event_id>", methods=["POST"])
@@ -639,6 +646,5 @@ textarea {
 
 
 if __name__ == "__main__":
-    init_db()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
