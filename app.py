@@ -2,13 +2,13 @@ import os
 import sqlite3
 import calendar
 from datetime import date
-from flask import Flask, request, redirect, session, render_template_string
+from html import escape
+from flask import Flask, request, redirect, session, render_template_string, url_for
 
 app = Flask(__name__)
-app.secret_key = "secret-key"
+app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret")
 
-PASSWORD = "0814"
-
+PASSWORD = os.environ.get("APP_PASSWORD", "1234")
 DB = "events.db"
 
 
@@ -18,8 +18,8 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            title TEXT,
+            date TEXT NOT NULL,
+            title TEXT NOT NULL,
             memo TEXT,
             url TEXT,
             image_url TEXT,
@@ -33,172 +33,712 @@ def init_db():
 init_db()
 
 
-def get_events():
+def login_required():
+    return session.get("login") is True
+
+
+def get_month_events(year, month):
+    start = f"{year}-{month:02d}-01"
+    last = calendar.monthrange(year, month)[1]
+    end = f"{year}-{month:02d}-{last:02d}"
+
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
-    cur.execute("SELECT * FROM events ORDER BY date")
+    cur.execute("""
+        SELECT id, date, title, memo, url, image_url, tag
+        FROM events
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date ASC, id ASC
+    """, (start, end))
     rows = cur.fetchall()
     conn.close()
     return rows
 
 
+def get_event(event_id):
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, date, title, memo, url, image_url, tag
+        FROM events
+        WHERE id = ?
+    """, (event_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
+    if login_required():
+        return redirect(url_for("calendar_view"))
+
+    error = ""
     if request.method == "POST":
         if request.form.get("pw") == PASSWORD:
             session["login"] = True
-            return redirect("/calendar")
-    return """
-    <form method="post" style="padding:40px;text-align:center;">
-    <h2>パスワード</h2>
-    <input name="pw" type="password" style="font-size:20px;">
-    <br><br>
-    <button style="font-size:20px;">ログイン</button>
-    </form>
-    """
+            return redirect(url_for("calendar_view"))
+        error = "パスワードが違います"
+
+    return render_template_string(LOGIN_TEMPLATE, error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/calendar")
 def calendar_view():
-    if not session.get("login"):
-        return redirect("/")
+    if not login_required():
+        return redirect(url_for("login"))
 
     today = date.today()
     year = int(request.args.get("year", today.year))
     month = int(request.args.get("month", today.month))
 
-    events = get_events()
+    if month < 1:
+        year -= 1
+        month = 12
+    elif month > 12:
+        year += 1
+        month = 1
 
-    event_dict = {}
-    for e in events:
-        event_dict.setdefault(e[1], []).append(e)
+    prev_year = year if month > 1 else year - 1
+    prev_month = month - 1 if month > 1 else 12
+    next_year = year if month < 12 else year + 1
+    next_month = month + 1 if month < 12 else 1
 
-    cal = calendar.monthcalendar(year, month)
+    rows = get_month_events(year, month)
 
-    return render_template_string("""
-    <h2>{{year}}年 {{month}}月</h2>
+    events_by_date = {}
+    for e in rows:
+        events_by_date.setdefault(e[1], []).append(e)
 
-    <a href="/calendar?year={{year}}&month={{month-1}}">◀</a>
-    <a href="/calendar?year={{year}}&month={{month+1}}">▶</a>
+    cal = calendar.Calendar(firstweekday=6)
+    weeks = cal.monthdatescalendar(year, month)
 
-    <table border=1>
-    {% for week in cal %}
-    <tr>
-    {% for d in week %}
-    <td>
-    {{d}}
-    {% set key = "%04d-%02d-%02d"|format(year,month,d) %}
-    {% if key in events %}
-        {% for e in events[key] %}
-        <div style="background:#ddd;margin:2px;">
-            {{e[2]}}<br>
-            <a href="/edit/{{e[0]}}">編集</a>
-            <a href="/delete/{{e[0]}}">削除</a>
-        </div>
-        {% endfor %}
-    {% endif %}
-    </td>
-    {% endfor %}
-    </tr>
-    {% endfor %}
-    </table>
-
-    <hr>
-
-    <h3>予定追加</h3>
-    <form action="/add" method="post">
-    日付<input name="date"><br>
-    タイトル<input name="title"><br>
-    メモ<textarea name="memo"></textarea><br>
-    URL<input name="url"><br>
-    画像URL<input name="image_url"><br>
-    タグ<input name="tag"><br>
-    <button>追加</button>
-    </form>
-
-    <hr>
-    <h3>今月の予定</h3>
-    {% for e in events_list %}
-        {{e[1]}} {{e[2]}} {{e[6]}}<br>
-    {% endfor %}
-    """,
-    year=year,
-    month=month,
-    cal=cal,
-    events=event_dict,
-    events_list=events
+    return render_template_string(
+        CALENDAR_TEMPLATE,
+        year=year,
+        month=month,
+        today=today,
+        weeks=weeks,
+        events_by_date=events_by_date,
+        events=rows,
+        prev_year=prev_year,
+        prev_month=prev_month,
+        next_year=next_year,
+        next_month=next_month
     )
 
 
 @app.route("/add", methods=["POST"])
 def add():
+    if not login_required():
+        return redirect(url_for("login"))
+
+    event_date = request.form.get("date", "").strip()
+    title = request.form.get("title", "").strip()
+    memo = request.form.get("memo", "").strip()
+    url = request.form.get("url", "").strip()
+    image_url = request.form.get("image_url", "").strip()
+    tag = request.form.get("tag", "").strip()
+
+    if not event_date or not title:
+        return redirect(url_for("calendar_view"))
+
     conn = sqlite3.connect(DB)
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO events(date,title,memo,url,image_url,tag)
-        VALUES (?,?,?,?,?,?)
-    """, (
-        request.form["date"],
-        request.form["title"],
-        request.form["memo"],
-        request.form["url"],
-        request.form["image_url"],
-        request.form["tag"]
-    ))
+        INSERT INTO events(date, title, memo, url, image_url, tag)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (event_date, title, memo, url, image_url, tag))
     conn.commit()
     conn.close()
-    return redirect("/calendar")
+
+    try:
+        y, m, _ = event_date.split("-")
+        return redirect(url_for("calendar_view", year=int(y), month=int(m)))
+    except Exception:
+        return redirect(url_for("calendar_view"))
 
 
-@app.route("/delete/<int:id>")
-def delete(id):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-    cur.execute("DELETE FROM events WHERE id=?", (id,))
-    conn.commit()
-    conn.close()
-    return redirect("/calendar")
-
-
-@app.route("/edit/<int:id>", methods=["GET", "POST"])
-def edit(id):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
+@app.route("/edit/<int:event_id>", methods=["GET", "POST"])
+def edit(event_id):
+    if not login_required():
+        return redirect(url_for("login"))
 
     if request.method == "POST":
+        event_date = request.form.get("date", "").strip()
+        title = request.form.get("title", "").strip()
+        memo = request.form.get("memo", "").strip()
+        url = request.form.get("url", "").strip()
+        image_url = request.form.get("image_url", "").strip()
+        tag = request.form.get("tag", "").strip()
+
+        conn = sqlite3.connect(DB)
+        cur = conn.cursor()
         cur.execute("""
             UPDATE events
-            SET date=?,title=?,memo=?,url=?,image_url=?,tag=?
+            SET date=?, title=?, memo=?, url=?, image_url=?, tag=?
             WHERE id=?
-        """, (
-            request.form["date"],
-            request.form["title"],
-            request.form["memo"],
-            request.form["url"],
-            request.form["image_url"],
-            request.form["tag"],
-            id
-        ))
+        """, (event_date, title, memo, url, image_url, tag, event_id))
         conn.commit()
         conn.close()
-        return redirect("/calendar")
 
-    cur.execute("SELECT * FROM events WHERE id=?", (id,))
-    e = cur.fetchone()
+        try:
+            y, m, _ = event_date.split("-")
+            return redirect(url_for("calendar_view", year=int(y), month=int(m)))
+        except Exception:
+            return redirect(url_for("calendar_view"))
+
+    event = get_event(event_id)
+    if not event:
+        return redirect(url_for("calendar_view"))
+
+    return render_template_string(EDIT_TEMPLATE, event=event)
+
+
+@app.route("/delete/<int:event_id>", methods=["POST"])
+def delete(event_id):
+    if not login_required():
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM events WHERE id=?", (event_id,))
+    conn.commit()
     conn.close()
 
-    return f"""
+    return redirect(request.referrer or url_for("calendar_view"))
+
+
+BASE_CSS = """
+<style>
+:root {
+  --bg:#f4f7fb;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --line:#e5e7eb;
+  --blue:#3b82f6;
+  --blue2:#2563eb;
+  --soft-blue:#dbeafe;
+  --green:#22c55e;
+  --red:#ef4444;
+  --red-soft:#fee2e2;
+  --shadow:0 10px 28px rgba(15,23,42,.08);
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  background:linear-gradient(180deg,#eef5ff 0%,#f8fafc 45%,#f4f7fb 100%);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;
+}
+.app {
+  max-width:520px;
+  margin:0 auto;
+  padding:14px;
+  padding-bottom:40px;
+}
+.card {
+  background:rgba(255,255,255,.96);
+  border-radius:28px;
+  padding:16px;
+  box-shadow:var(--shadow);
+  margin-bottom:14px;
+}
+.header {
+  padding:20px 18px;
+}
+.top-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:14px;
+}
+.app-title {
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:-.03em;
+}
+.logout {
+  text-decoration:none;
+  color:#64748b;
+  background:#f1f5f9;
+  padding:8px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+}
+.nav {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.nav a {
+  width:46px;
+  height:40px;
+  border-radius:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#e8eef8;
+  color:var(--blue2);
+  text-decoration:none;
+  font-size:28px;
+  font-weight:900;
+}
+.month {
+  font-size:22px;
+  font-weight:900;
+}
+.section-title {
+  font-size:18px;
+  font-weight:900;
+  margin:0 0 12px;
+}
+.weekdays, .week {
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+}
+.weekdays div {
+  text-align:center;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:900;
+  padding:4px 0 8px;
+}
+.day {
+  min-height:52px;
+  border-radius:17px;
+  background:#f3f4f6;
+  text-align:center;
+  padding:7px 2px;
+  position:relative;
+  font-weight:900;
+  font-size:14px;
+}
+.day.other {
+  opacity:.28;
+}
+.day.today {
+  background:var(--green);
+  color:#fff;
+}
+.day.has {
+  background:var(--soft-blue);
+  color:#1d4ed8;
+}
+.dot {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--blue);
+  position:absolute;
+  left:50%;
+  bottom:7px;
+  transform:translateX(-50%);
+}
+.form-grid {
+  display:grid;
+  gap:10px;
+}
+label {
+  font-size:12px;
+  font-weight:900;
+  color:#475569;
+  margin-bottom:4px;
+  display:block;
+}
+input, textarea, select {
+  width:100%;
+  border:0;
+  outline:none;
+  background:#f1f5f9;
+  border-radius:16px;
+  padding:13px 14px;
+  font-size:16px;
+  color:var(--text);
+}
+textarea {
+  min-height:88px;
+  resize:vertical;
+}
+.btn {
+  width:100%;
+  height:48px;
+  border:0;
+  border-radius:18px;
+  background:var(--blue);
+  color:#fff;
+  font-size:16px;
+  font-weight:900;
+  margin-top:4px;
+}
+.btn:hover { background:var(--blue2); }
+.event {
+  background:#f8fafc;
+  border:1px solid #eef2f7;
+  border-radius:22px;
+  padding:14px;
+  margin:10px 0;
+}
+.event-head {
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  align-items:flex-start;
+}
+.event-date {
+  color:var(--blue2);
+  font-size:12px;
+  font-weight:900;
+  margin-bottom:4px;
+}
+.event-title {
+  font-size:16px;
+  font-weight:900;
+  line-height:1.35;
+}
+.tag {
+  flex-shrink:0;
+  background:#eef4ff;
+  color:#2563eb;
+  border-radius:999px;
+  padding:5px 9px;
+  font-size:11px;
+  font-weight:900;
+}
+.event-memo {
+  color:#64748b;
+  font-size:13px;
+  line-height:1.6;
+  white-space:pre-wrap;
+  margin-top:8px;
+}
+.link {
+  display:block;
+  color:#2563eb;
+  word-break:break-all;
+  font-size:13px;
+  margin-top:8px;
+  text-decoration:none;
+  font-weight:800;
+}
+.event-actions {
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+}
+.small-btn {
+  flex:1;
+  border:0;
+  border-radius:14px;
+  padding:10px;
+  font-weight:900;
+  text-align:center;
+  text-decoration:none;
+  font-size:13px;
+}
+.edit-btn {
+  background:#eef4ff;
+  color:#2563eb;
+}
+.delete-btn {
+  background:var(--red-soft);
+  color:#dc2626;
+}
+.empty {
+  background:#f8fafc;
+  border-radius:20px;
+  padding:20px;
+  text-align:center;
+  color:#64748b;
+  font-weight:800;
+}
+.login-wrap {
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.login-card {
+  width:100%;
+  max-width:420px;
+  background:#fff;
+  border-radius:30px;
+  box-shadow:var(--shadow);
+  padding:26px;
+}
+.login-title {
+  font-size:25px;
+  font-weight:900;
+  text-align:center;
+  margin-bottom:8px;
+}
+.login-sub {
+  text-align:center;
+  color:#64748b;
+  margin-bottom:20px;
+  font-weight:700;
+}
+.error {
+  background:#fee2e2;
+  color:#b91c1c;
+  padding:10px;
+  border-radius:16px;
+  font-weight:800;
+  margin-bottom:12px;
+}
+.back {
+  display:block;
+  text-align:center;
+  text-decoration:none;
+  color:#475569;
+  background:#f1f5f9;
+  border-radius:18px;
+  padding:13px;
+  font-weight:900;
+  margin-top:10px;
+}
+@media (max-width:390px) {
+  .app { padding:10px; }
+  .day { min-height:46px; border-radius:14px; }
+  .month { font-size:20px; }
+}
+</style>
+"""
+
+
+LOGIN_TEMPLATE = """
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ログイン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+""" + BASE_CSS + """
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-title">共有カレンダー</div>
+    <div class="login-sub">パスワードを入力してください</div>
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
     <form method="post">
-    日付<input name="date" value="{e[1]}"><br>
-    タイトル<input name="title" value="{e[2]}"><br>
-    メモ<textarea name="memo">{e[3]}</textarea><br>
-    URL<input name="url" value="{e[4]}"><br>
-    画像URL<input name="image_url" value="{e[5]}"><br>
-    タグ<input name="tag" value="{e[6]}"><br>
-    <button>更新</button>
+      <input name="pw" type="password" placeholder="パスワード" autocomplete="current-password">
+      <button class="btn" type="submit">ログイン</button>
     </form>
-    """
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+CALENDAR_TEMPLATE = """
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>撮影会カレンダー</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+""" + BASE_CSS + """
+</head>
+<body>
+<div class="app">
+
+  <section class="card header">
+    <div class="top-row">
+      <div class="app-title">共有カレンダー</div>
+      <a class="logout" href="/logout">ログアウト</a>
+    </div>
+    <div class="nav">
+      <a href="/calendar?year={{ prev_year }}&month={{ prev_month }}">‹</a>
+      <div class="month">{{ year }}年 {{ month }}月</div>
+      <a href="/calendar?year={{ next_year }}&month={{ next_month }}">›</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="weekdays">
+      <div style="color:#ef4444;">日</div>
+      <div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+    </div>
+
+    {% for week in weeks %}
+      <div class="week">
+        {% for d in week %}
+          {% set ds = d.strftime("%Y-%m-%d") %}
+          <div class="day {% if d.month != month %}other{% endif %} {% if d == today %}today{% endif %} {% if ds in events_by_date %}has{% endif %}">
+            {{ d.day }}
+            {% if ds in events_by_date %}
+              <span class="dot"></span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">予定追加</h2>
+    <form class="form-grid" action="/add" method="post">
+      <div>
+        <label>日付</label>
+        <input name="date" type="date" required>
+      </div>
+
+      <div>
+        <label>タイトル</label>
+        <input name="title" placeholder="例：Milk*Sugar撮影会" required>
+      </div>
+
+      <div>
+        <label>タグ</label>
+        <select name="tag">
+          <option value="撮影会">撮影会</option>
+          <option value="イベント">イベント</option>
+          <option value="締切">締切</option>
+          <option value="予定">予定</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+
+      <div>
+        <label>メモ</label>
+        <textarea name="memo" placeholder="場所・部数・申し込みメモなど"></textarea>
+      </div>
+
+      <div>
+        <label>投稿URL</label>
+        <input name="url" placeholder="https://...">
+      </div>
+
+      <div>
+        <label>画像URL / スクショメモ</label>
+        <input name="image_url" placeholder="画像URLや「スクショ保存済み」など">
+      </div>
+
+      <button class="btn" type="submit">予定を追加</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">今月の予定</h2>
+
+    {% if not events %}
+      <div class="empty">予定はまだありません</div>
+    {% endif %}
+
+    {% for id, event_date, title, memo, url, image_url, tag in events %}
+      <div class="event">
+        <div class="event-head">
+          <div>
+            <div class="event-date">{{ event_date }}</div>
+            <div class="event-title">{{ title }}</div>
+          </div>
+          {% if tag %}
+            <div class="tag">{{ tag }}</div>
+          {% endif %}
+        </div>
+
+        {% if memo %}
+          <div class="event-memo">{{ memo }}</div>
+        {% endif %}
+
+        {% if url %}
+          <a class="link" href="{{ url }}" target="_blank">投稿URLを開く</a>
+        {% endif %}
+
+        {% if image_url %}
+          <div class="event-memo">画像/スクショ：{{ image_url }}</div>
+        {% endif %}
+
+        <div class="event-actions">
+          <a class="small-btn edit-btn" href="/edit/{{ id }}">編集</a>
+          <form method="post" action="/delete/{{ id }}" style="flex:1;margin:0;" onsubmit="return confirm('削除しますか？');">
+            <button class="small-btn delete-btn" type="submit" style="width:100%;">削除</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </section>
+
+</div>
+</body>
+</html>
+"""
+
+
+EDIT_TEMPLATE = """
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>予定編集</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+""" + BASE_CSS + """
+</head>
+<body>
+<div class="app">
+  <section class="card">
+    <h1 class="section-title">予定編集</h1>
+
+    <form class="form-grid" method="post">
+      <div>
+        <label>日付</label>
+        <input name="date" type="date" value="{{ event[1] }}" required>
+      </div>
+
+      <div>
+        <label>タイトル</label>
+        <input name="title" value="{{ event[2] }}" required>
+      </div>
+
+      <div>
+        <label>タグ</label>
+        <select name="tag">
+          {% for t in ["撮影会","イベント","締切","予定","その他"] %}
+            <option value="{{ t }}" {% if event[6] == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label>メモ</label>
+        <textarea name="memo">{{ event[3] or "" }}</textarea>
+      </div>
+
+      <div>
+        <label>投稿URL</label>
+        <input name="url" value="{{ event[4] or "" }}">
+      </div>
+
+      <div>
+        <label>画像URL / スクショメモ</label>
+        <input name="image_url" value="{{ event[5] or "" }}">
+      </div>
+
+      <button class="btn" type="submit">更新する</button>
+    </form>
+
+    <a class="back" href="/calendar">戻る</a>
+  </section>
+</div>
+</body>
+</html>
+"""
 
 
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
