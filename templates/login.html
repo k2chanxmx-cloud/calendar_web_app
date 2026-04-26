@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>ログイン</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="apple-touch-icon" href="/static/icon.png?v=2">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-title">共有カレンダー</div>
+      <div class="login-sub">パスワードを入力してください</div>
+
+      {% if error %}
+        <div class="error">{{ error }}</div>
+      {% endif %}
+
+      <form method="post">
+        <input name="pw" type="password" placeholder="パスワード">
+        <button class="btn" type="submit">ログイン</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

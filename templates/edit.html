@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>予定編集</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="apple-touch-icon" href="/static/icon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <section class="card">
+    <h1 class="section-title">予定編集</h1>
+
+    <form class="form-grid" method="post">
+      <div>
+        <label>開始日</label>
+        <input name="start_date" type="date" value="{{ event.start_date }}" required>
+      </div>
+
+      <div>
+        <label>終了日</label>
+        <input name="end_date" type="date" value="{{ event.end_date }}">
+      </div>
+
+      <div>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
+          <input class="owner-radio" type="radio" id="owner_maki_edit" name="owner" value="まき" {% if event.owner == "まき" %}checked{% endif %}>
+          <label class="owner-label maki" for="owner_maki_edit">まき</label>
+
+          <input class="owner-radio" type="radio" id="owner_ryota_edit" name="owner" value="亮太" {% if event.owner == "亮太" %}checked{% endif %}>
+          <label class="owner-label ryota" for="owner_ryota_edit">亮太</label>
+
+          <input class="owner-radio" type="radio" id="owner_both_edit" name="owner" value="二人" {% if event.owner == "二人" %}checked{% endif %}>
+          <label class="owner-label both" for="owner_both_edit">二人</label>
+        </div>
+      </div>
+
+      <div>
+        <label>タイトル</label>
+        <input name="title" value="{{ event.title }}" required>
+      </div>
+
+      <div>
+        <label>タグ</label>
+        <select name="tag">
+          {% for tag in tags %}
+            <option value="{{ tag }}" {% if event.tag == tag %}selected{% endif %}>{{ tag }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label>開始時間</label>
+        <div class="time-row">
+          <select name="start_hour">
+            <option value="">--</option>
+            {% for h in hours %}
+              <option value="{{ h }}" {% if event.start_hour == h %}selected{% endif %}>{{ h }}</option>
+            {% endfor %}
+          </select>
+          <span>時</span>
+
+          <select name="start_minute">
+            <option value="">--</option>
+            {% for m in minutes %}
+              <option value="{{ m }}" {% if event.start_minute == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span>分</span>
+        </div>
+      </div>
+
+      <div>
+        <label>終了時間</label>
+        <div class="time-row">
+          <select name="end_hour">
+            <option value="">--</option>
+            {% for h in hours %}
+              <option value="{{ h }}" {% if event.end_hour == h %}selected{% endif %}>{{ h }}</option>
+            {% endfor %}
+          </select>
+          <span>時</span>
+
+          <select name="end_minute">
+            <option value="">--</option>
+            {% for m in minutes %}
+              <option value="{{ m }}" {% if event.end_minute == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span>分</span>
+        </div>
+      </div>
+
+      <div>
+        <label>場所</label>
+        <input name="location" value="{{ event.location or '' }}">
+      </div>
+
+      <div>
+        <label>メモ</label>
+        <textarea name="memo">{{ event.memo or "" }}</textarea>
+      </div>
+
+      <div>
+        <label>URL</label>
+        <input name="url" value="{{ event.url or '' }}">
+      </div>
+
+      <button class="btn" type="submit">更新する</button>
+    </form>
+
+    <a class="back" href="/calendar">戻る</a>
+  </section>
+</div>
+</body>
+</html>

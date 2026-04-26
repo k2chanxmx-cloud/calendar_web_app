@@ -1,0 +1,52 @@
+<div class="event">
+  <div class="event-head">
+    <div>
+      <div class="event-date">
+        {% if event.start_date == event.end_date %}
+          {{ event.start_date }}
+        {% else %}
+          {{ event.start_date }}〜{{ event.end_date }}
+        {% endif %}
+      </div>
+
+      {% if event.start_time or event.end_time %}
+        <div class="event-time">
+          {{ event.start_time or "" }}
+          {% if event.end_time %}〜{{ event.end_time }}{% endif %}
+        </div>
+      {% endif %}
+
+      <div class="event-title">{{ event.title }}</div>
+    </div>
+
+    <div class="tag-row">
+      <div class="tag owner-tag {% if event.owner == '亮太' %}ryota{% elif event.owner == '二人' %}both{% else %}maki{% endif %}">
+        {{ event.owner }}
+      </div>
+
+      {% if event.tag %}
+        <div class="tag">{{ event.tag }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if event.location %}
+    <div class="event-memo">場所：{{ event.location }}</div>
+  {% endif %}
+
+  {% if event.memo %}
+    <div class="event-memo">{{ event.memo }}</div>
+  {% endif %}
+
+  {% if event.url %}
+    <a class="link" href="{{ event.url }}" target="_blank">URLを開く</a>
+  {% endif %}
+
+  <div class="event-actions">
+    <a class="small-btn edit-btn" href="/edit/{{ event.id }}">編集</a>
+
+    <form method="post" action="/delete/{{ event.id }}" style="flex:1;margin:0;" onsubmit="return confirm('削除しますか？');">
+      <button class="small-btn delete-btn" type="submit">削除</button>
+    </form>
+  </div>
+</div>

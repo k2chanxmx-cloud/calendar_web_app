@@ -1,0 +1,479 @@
+:root {
+  --bg:#f4f7fb;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --blue:#3b82f6;
+  --blue2:#2563eb;
+  --soft-blue:#dbeafe;
+  --green:#22c55e;
+  --red-soft:#fee2e2;
+  --pink:#ec4899;
+  --pink-soft:#fce7f3;
+  --orange:#f97316;
+  --orange-soft:#ffedd5;
+  --purple:#8b5cf6;
+  --purple-soft:#ede9fe;
+  --shadow:0 10px 28px rgba(15,23,42,.08);
+}
+
+* {
+  box-sizing:border-box;
+}
+
+body {
+  margin:0;
+  background:linear-gradient(180deg,#eef5ff 0%,#f8fafc 45%,#f4f7fb 100%);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;
+}
+
+/* =========================
+  全体
+========================= */
+.app {
+  max-width:520px;
+  margin:0 auto;
+  padding:14px;
+  padding-bottom:40px;
+}
+
+.card {
+  background:rgba(255,255,255,.96);
+  border-radius:28px;
+  padding:16px;
+  box-shadow:var(--shadow);
+  margin-bottom:14px;
+}
+
+/* =========================
+  ヘッダー
+========================= */
+.header {
+  padding:20px 18px;
+}
+
+.top-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:14px;
+}
+
+.app-title {
+  font-size:24px;
+  font-weight:900;
+}
+
+.logout {
+  text-decoration:none;
+  color:#64748b;
+  background:#f1f5f9;
+  padding:8px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+}
+
+.nav {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.nav a {
+  width:46px;
+  height:40px;
+  border-radius:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#e8eef8;
+  color:var(--blue2);
+  text-decoration:none;
+  font-size:28px;
+  font-weight:900;
+}
+
+.month {
+  font-size:22px;
+  font-weight:900;
+}
+
+/* =========================
+  カレンダー
+========================= */
+.weekdays,
+.week {
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+}
+
+.weekdays div {
+  text-align:center;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:900;
+  padding:4px 0 8px;
+}
+
+.weekdays .sun {
+  color:#ef4444;
+}
+
+.day-link {
+  text-decoration:none;
+  color:inherit;
+}
+
+.day {
+  min-height:52px;
+  border-radius:17px;
+  background:#f3f4f6;
+  text-align:center;
+  padding:7px 2px;
+  position:relative;
+  font-weight:900;
+  font-size:14px;
+}
+
+.day.other {
+  opacity:.28;
+}
+
+.day.today {
+  background:var(--green);
+  color:#fff;
+}
+
+.day.has {
+  background:var(--soft-blue);
+  color:#1d4ed8;
+}
+
+/* 祝日 */
+.day.holiday {
+  background:#ffe4e6;
+  color:#dc2626;
+}
+
+/* 点 */
+.dot {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--blue);
+  position:absolute;
+  left:50%;
+  bottom:7px;
+  transform:translateX(-50%);
+}
+
+/* =========================
+  フォーム
+========================= */
+.form-grid {
+  display:grid;
+  gap:10px;
+}
+
+label {
+  font-size:12px;
+  font-weight:900;
+  color:#475569;
+  margin-bottom:4px;
+  display:block;
+}
+
+input,
+textarea,
+select {
+  width:100%;
+  border:0;
+  outline:none;
+  background:#f1f5f9;
+  border-radius:16px;
+  padding:13px 14px;
+  font-size:16px;
+  color:var(--text);
+}
+
+textarea {
+  min-height:88px;
+  resize:vertical;
+}
+
+.btn {
+  width:100%;
+  height:48px;
+  border:0;
+  border-radius:18px;
+  background:var(--blue);
+  color:#fff;
+  font-size:16px;
+  font-weight:900;
+  margin-top:4px;
+}
+
+/* =========================
+  時間UI
+========================= */
+.time-row {
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+/* =========================
+  誰の予定ボタン
+========================= */
+.owner-buttons {
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:8px;
+}
+
+.owner-radio {
+  display:none;
+}
+
+.owner-label {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:46px;
+  border-radius:18px;
+  background:#f1f5f9;
+  color:#64748b;
+  font-size:15px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.owner-radio:checked + .owner-label.maki {
+  background:var(--pink-soft);
+  color:var(--pink);
+  box-shadow:inset 0 0 0 2px var(--pink);
+}
+
+.owner-radio:checked + .owner-label.ryota {
+  background:var(--orange-soft);
+  color:var(--orange);
+  box-shadow:inset 0 0 0 2px var(--orange);
+}
+
+.owner-radio:checked + .owner-label.both {
+  background:var(--purple-soft);
+  color:var(--purple);
+  box-shadow:inset 0 0 0 2px var(--purple);
+}
+
+/* =========================
+  タブ
+========================= */
+.tabs {
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:8px;
+  background:#f1f5f9;
+  padding:6px;
+  border-radius:20px;
+  margin-bottom:12px;
+}
+
+.tab-btn {
+  border:0;
+  height:40px;
+  border-radius:16px;
+  font-size:14px;
+  font-weight:900;
+  background:transparent;
+  color:#64748b;
+}
+
+.tab-btn.active.maki {
+  background:#fff;
+  color:var(--pink);
+}
+
+.tab-btn.active.ryota {
+  background:#fff;
+  color:var(--orange);
+}
+
+.tab-btn.active.both {
+  background:#fff;
+  color:var(--purple);
+}
+
+.tab-panel {
+  display:none;
+}
+
+.tab-panel.active {
+  display:block;
+}
+
+/* =========================
+  イベント
+========================= */
+.event {
+  background:#f8fafc;
+  border:1px solid #eef2f7;
+  border-radius:22px;
+  padding:14px;
+  margin:10px 0;
+}
+
+.event-head {
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.event-date {
+  font-size:12px;
+  font-weight:900;
+  color:var(--blue2);
+}
+
+.event-time {
+  font-size:13px;
+  color:#0f172a;
+  margin-top:4px;
+}
+
+.event-title {
+  font-size:16px;
+  font-weight:900;
+  margin-top:4px;
+}
+
+.tag-row {
+  display:flex;
+  gap:6px;
+}
+
+.tag {
+  border-radius:999px;
+  padding:5px 9px;
+  font-size:11px;
+  font-weight:900;
+  background:#eef4ff;
+  color:#2563eb;
+}
+
+/* 所有者色 */
+.owner-tag.maki {
+  background:var(--pink-soft);
+  color:var(--pink);
+}
+
+.owner-tag.ryota {
+  background:var(--orange-soft);
+  color:var(--orange);
+}
+
+.owner-tag.both {
+  background:var(--purple-soft);
+  color:var(--purple);
+}
+
+.event-memo {
+  margin-top:8px;
+  font-size:13px;
+  color:#64748b;
+}
+
+.link {
+  display:block;
+  margin-top:8px;
+  font-size:13px;
+  color:#2563eb;
+  text-decoration:none;
+}
+
+.event-actions {
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+}
+
+.small-btn {
+  flex:1;
+  border:0;
+  border-radius:14px;
+  padding:10px;
+  font-weight:900;
+  font-size:13px;
+  text-align:center;
+}
+
+.edit-btn {
+  background:#eef4ff;
+  color:#2563eb;
+}
+
+.delete-btn {
+  background:var(--red-soft);
+  color:#dc2626;
+}
+
+/* =========================
+  その他
+========================= */
+.empty {
+  text-align:center;
+  padding:20px;
+  color:#64748b;
+}
+
+.back {
+  display:block;
+  text-align:center;
+  padding:12px;
+  margin-top:10px;
+  background:#f1f5f9;
+  border-radius:18px;
+  text-decoration:none;
+}
+
+/* =========================
+  ログイン
+========================= */
+.login-wrap {
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.login-card {
+  width:100%;
+  max-width:420px;
+  background:#fff;
+  border-radius:30px;
+  padding:26px;
+  box-shadow:var(--shadow);
+}
+
+.login-title {
+  font-size:24px;
+  font-weight:900;
+  text-align:center;
+}
+
+.login-sub {
+  text-align:center;
+  color:#64748b;
+  margin-bottom:20px;
+}
+
+.error {
+  background:#fee2e2;
+  color:#b91c1c;
+  padding:10px;
+  border-radius:16px;
+  margin-bottom:10px;
+}

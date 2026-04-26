@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>共有カレンダー</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="apple-touch-icon" href="/static/icon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+
+  <section class="card header">
+    <div class="top-row">
+      <div class="app-title">まきと亮太のカレンダー</div>
+      <a class="logout" href="/logout">ログアウト</a>
+    </div>
+
+    <div class="nav">
+      <a href="/calendar?year={{ prev_year }}&month={{ prev_month }}">‹</a>
+      <div class="month">{{ year }}年 {{ month }}月</div>
+      <a href="/calendar?year={{ next_year }}&month={{ next_month }}">›</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="weekdays">
+      <div class="sun">日</div>
+      <div>月</div>
+      <div>火</div>
+      <div>水</div>
+      <div>木</div>
+      <div>金</div>
+      <div>土</div>
+    </div>
+
+    {% for week in weeks %}
+      <div class="week">
+        {% for d in week %}
+          {% set ds = d.strftime("%Y-%m-%d") %}
+          <a class="day-link" href="/new?date={{ ds }}">
+            <div class="
+              day
+              {% if d.month != month %}other{% endif %}
+              {% if d == today %}today{% endif %}
+              {% if ds in events_by_date %}has{% endif %}
+              {% if ds in holidays %}holiday{% endif %}
+            ">
+              <span>{{ d.day }}</span>
+
+              {% if ds in events_by_date %}
+                <span class="dot"></span>
+              {% endif %}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">予定追加</h2>
+
+    <form class="form-grid" action="/add" method="post">
+      <div>
+        <label>開始日</label>
+        <input name="start_date" type="date" required>
+      </div>
+
+      <div>
+        <label>終了日</label>
+        <input name="end_date" type="date">
+      </div>
+
+      <div>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
+          <input class="owner-radio" type="radio" id="owner_maki_main" name="owner" value="まき" checked>
+          <label class="owner-label maki" for="owner_maki_main">まき</label>
+
+          <input class="owner-radio" type="radio" id="owner_ryota_main" name="owner" value="亮太">
+          <label class="owner-label ryota" for="owner_ryota_main">亮太</label>
+
+          <input class="owner-radio" type="radio" id="owner_both_main" name="owner" value="二人">
+          <label class="owner-label both" for="owner_both_main">二人</label>
+        </div>
+      </div>
+
+      <div>
+        <label>タイトル</label>
+        <input name="title" required>
+      </div>
+
+      <div>
+        <label>タグ</label>
+        <select name="tag">
+          {% for tag in tags %}
+            <option value="{{ tag }}">{{ tag }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label>開始時間</label>
+        <div class="time-row">
+          <select name="start_hour">
+            <option value="">--</option>
+            {% for h in hours %}
+              <option value="{{ h }}">{{ h }}</option>
+            {% endfor %}
+          </select>
+          <span>時</span>
+          <select name="start_minute">
+            <option value="">--</option>
+            {% for m in minutes %}
+              <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span>分</span>
+        </div>
+      </div>
+
+      <div>
+        <label>終了時間</label>
+        <div class="time-row">
+          <select name="end_hour">
+            <option value="">--</option>
+            {% for h in hours %}
+              <option value="{{ h }}">{{ h }}</option>
+            {% endfor %}
+          </select>
+          <span>時</span>
+          <select name="end_minute">
+            <option value="">--</option>
+            {% for m in minutes %}
+              <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span>分</span>
+        </div>
+      </div>
+
+      <div>
+        <label>場所</label>
+        <input name="location">
+      </div>
+
+      <div>
+        <label>メモ</label>
+        <textarea name="memo"></textarea>
+      </div>
+
+      <div>
+        <label>URL</label>
+        <input name="url">
+      </div>
+
+      <button class="btn" type="submit">予定を追加</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">今月の予定</h2>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active maki" onclick="showTab('maki')">まき</button>
+      <button type="button" class="tab-btn ryota" onclick="showTab('ryota')">亮太</button>
+      <button type="button" class="tab-btn both" onclick="showTab('both')">二人</button>
+    </div>
+
+    <div id="tab-maki" class="tab-panel active">
+      {% if not maki_events %}
+        <div class="empty">まきの予定はまだありません</div>
+      {% endif %}
+
+      {% for event in maki_events %}
+        {% include "_event_card.html" %}
+      {% endfor %}
+    </div>
+
+    <div id="tab-ryota" class="tab-panel">
+      {% if not ryota_events %}
+        <div class="empty">亮太の予定はまだありません</div>
+      {% endif %}
+
+      {% for event in ryota_events %}
+        {% include "_event_card.html" %}
+      {% endfor %}
+    </div>
+
+    <div id="tab-both" class="tab-panel">
+      {% if not both_events %}
+        <div class="empty">二人の予定はまだありません</div>
+      {% endif %}
+
+      {% for event in both_events %}
+        {% include "_event_card.html" %}
+      {% endfor %}
+    </div>
+  </section>
+
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll(".tab-panel").forEach(panel => {
+    panel.classList.remove("active");
+  });
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.remove("active");
+  });
+
+  document.getElementById("tab-" + name).classList.add("active");
+  document.querySelector(".tab-btn." + name).classList.add("active");
+}
+</script>
+</body>
+</html>
