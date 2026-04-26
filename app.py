@@ -663,7 +663,7 @@ LOGIN_TEMPLATE = """
 <title>ログイン</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-<link rel="apple-touch-icon" href="/static/icon.png">
+<link rel="apple-touch-icon" href="/static/icon.png?v=2">
 
 """ + BASE_CSS + """
 </head>
