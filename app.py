@@ -7,7 +7,7 @@ from flask import Flask, request, redirect, session, render_template, url_for
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret")
 
-PASSWORD = os.environ.get("APP_PASSWORD", "1234")
+PASSWORD = os.environ.get("APP_PASSWORD", "0814")
 DB = "events.db"
 
 TAGS = ["撮影会", "通院", "生理", "デート", "飲み会", "邂逅", "休日", "その他"]
