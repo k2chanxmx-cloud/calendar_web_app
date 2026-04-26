@@ -48,9 +48,33 @@
             ">
               <span>{{ d.day }}</span>
 
-              {% if ds in events_by_date %}
-                <span class="dot"></span>
-              {% endif %}
+				{% if ds in events_by_date %}
+				  <div class="dot-row">
+				    {% set ns = namespace(has_maki=false, has_ryota=false, has_both=false) %}
+
+				    {% for ev in events_by_date[ds] %}
+				      {% if ev.owner == "まき" %}
+				        {% set ns.has_maki = true %}
+				      {% elif ev.owner == "亮太" %}
+				        {% set ns.has_ryota = true %}
+				      {% elif ev.owner == "二人" %}
+				        {% set ns.has_both = true %}
+				      {% endif %}
+				    {% endfor %}
+
+				    {% if ns.has_maki %}
+				      <span class="dot dot-maki"></span>
+				    {% endif %}
+
+				    {% if ns.has_ryota %}
+				      <span class="dot dot-ryota"></span>
+				    {% endif %}
+
+				    {% if ns.has_both %}
+				      <span class="dot dot-both"></span>
+				    {% endif %}
+				  </div>
+				{% endif %}
             </div>
           </a>
         {% endfor %}

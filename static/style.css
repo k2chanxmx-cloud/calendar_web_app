@@ -159,15 +159,34 @@ body {
 }
 
 /* 点 */
-.dot {
-  width:6px;
-  height:6px;
-  border-radius:50%;
-  background:var(--blue);
+.dot-row {
   position:absolute;
   left:50%;
   bottom:7px;
   transform:translateX(-50%);
+  display:flex;
+  gap:3px;
+  align-items:center;
+  justify-content:center;
+}
+
+.dot {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  display:block;
+}
+
+.dot-maki {
+  background:#ec4899;
+}
+
+.dot-ryota {
+  background:#f97316;
+}
+
+.dot-both {
+  background:#8b5cf6;
 }
 
 /* =========================
