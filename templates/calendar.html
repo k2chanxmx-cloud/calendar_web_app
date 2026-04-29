@@ -32,6 +32,18 @@
   </section>
 
   <section class="card">
+    <h2 class="section-title">今日の予定</h2>
+
+    {% if not today_events %}
+      <div class="empty">今日の予定はありません</div>
+    {% endif %}
+
+    {% for event in today_events %}
+      {% include "_event_card.html" %}
+    {% endfor %}
+  </section>
+
+  <section class="card">
     <div class="weekdays">
       <div class="sun">日</div>
       <div>月</div>
@@ -46,7 +58,7 @@
       <div class="week">
         {% for d in week %}
           {% set ds = d.strftime("%Y-%m-%d") %}
-          <a class="day-link" href="/new?date={{ ds }}">
+          <a class="day-link" href="/day/{{ ds }}">
             <div class="
               day
               {% if d.month != month %}other{% endif %}
@@ -94,12 +106,12 @@
     <form class="form-grid" action="/add" method="post">
       <div>
         <label>開始日</label>
-        <input name="start_date" type="date" required>
+        <input name="start_date" type="date" value="{{ today_key }}" required>
       </div>
 
       <div>
         <label>終了日</label>
-        <input name="end_date" type="date">
+        <input name="end_date" type="date" value="{{ today_key }}">
       </div>
 
       <div>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>日別予定</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div class="app">
+
+  <section class="card header">
+    <div class="top-row">
+      <div class="app-title">{{ target_date }} の予定</div>
+      <a class="logout" href="/calendar">戻る</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">この日の予定</h2>
+
+    {% if not events %}
+      <div class="empty">この日の予定はありません</div>
+    {% endif %}
+
+    {% for event in events %}
+      {% include "_event_card.html" %}
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">この日に予定追加</h2>
+
+    <a class="btn day-add-btn" href="/new?date={{ target_date }}">
+      予定を追加する
+    </a>
+  </section>
+
+</div>
+</body>
+</html>

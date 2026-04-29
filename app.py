@@ -164,6 +164,24 @@ def get_month_events(year, month):
     return [normalize_event(row) for row in rows]
 
 
+def get_day_events(target_date):
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    cur.execute("""
+        SELECT id, start_date, end_date, title, tag, owner,
+               location, memo, url, start_time, end_time
+        FROM events
+        WHERE start_date <= %s
+          AND end_date >= %s
+        ORDER BY start_time ASC NULLS LAST, id ASC;
+    """, (target_date, target_date))
+
+    rows = cur.fetchall()
+    conn.close()
+    return [normalize_event(row) for row in rows]
+
+
 def get_event(event_id):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -231,7 +249,7 @@ def notify_all_devices(event):
     payload = {
         "title": "予定が追加されました",
         "body": "\n".join(body_lines),
-        "url": "/calendar"
+        "url": f"/day/{event.get('start_date')}"
     }
 
     expired_ids = []
@@ -315,6 +333,9 @@ def calendar_view():
     ryota_events = [e for e in events if e["owner"] == "亮太"]
     both_events = [e for e in events if e["owner"] == "二人"]
 
+    today_key = today.strftime("%Y-%m-%d")
+    today_events = get_day_events(today_key)
+
     weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(year, month)
 
     return render_template(
@@ -322,6 +343,8 @@ def calendar_view():
         year=year,
         month=month,
         today=today,
+        today_key=today_key,
+        today_events=today_events,
         weeks=weeks,
         events_by_date=events_by_date,
         maki_events=maki_events,
@@ -337,6 +360,26 @@ def calendar_view():
         minutes=MINUTES,
         holidays=get_japanese_holidays(year),
         vapid_public_key=VAPID_PUBLIC_KEY,
+    )
+
+
+@app.route("/day/<target_date>")
+def day_view(target_date):
+    if not login_required():
+        return redirect(url_for("login"))
+
+    try:
+        parsed = parse_date(target_date)
+    except Exception:
+        return redirect(url_for("calendar_view"))
+
+    events = get_day_events(target_date)
+
+    return render_template(
+        "day.html",
+        target_date=target_date,
+        parsed_date=parsed,
+        events=events
     )
 
 
@@ -428,11 +471,7 @@ def add():
 
     notify_all_devices(event)
 
-    try:
-        y, m, _ = start_date.split("-")
-        return redirect(url_for("calendar_view", year=int(y), month=int(m)))
-    except Exception:
-        return redirect(url_for("calendar_view"))
+    return redirect(url_for("day_view", target_date=start_date))
 
 
 @app.route("/edit/<int:event_id>", methods=["GET", "POST"])
@@ -501,11 +540,7 @@ def edit(event_id):
         conn.commit()
         conn.close()
 
-        try:
-            y, m, _ = start_date.split("-")
-            return redirect(url_for("calendar_view", year=int(y), month=int(m)))
-        except Exception:
-            return redirect(url_for("calendar_view"))
+        return redirect(url_for("day_view", target_date=start_date))
 
     return render_template(
         "edit.html",
@@ -522,13 +557,19 @@ def delete(event_id):
     if not login_required():
         return redirect(url_for("login"))
 
+    event = get_event(event_id)
+    redirect_date = event["start_date"] if event else None
+
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM events WHERE id=%s;", (event_id,))
     conn.commit()
     conn.close()
 
-    return redirect(request.referrer or url_for("calendar_view"))
+    if redirect_date:
+        return redirect(url_for("day_view", target_date=redirect_date))
+
+    return redirect(url_for("calendar_view"))
 
 
 @app.route("/subscribe", methods=["POST"])
@@ -562,9 +603,11 @@ def test_notification():
     if not login_required():
         return jsonify({"ok": False}), 401
 
+    today = date.today().strftime("%Y-%m-%d")
+
     notify_all_devices({
-        "start_date": date.today().strftime("%Y-%m-%d"),
-        "end_date": date.today().strftime("%Y-%m-%d"),
+        "start_date": today,
+        "end_date": today,
         "title": "テスト通知",
         "owner": "",
         "location": "",
