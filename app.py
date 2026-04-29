@@ -162,48 +162,72 @@ def get_month_events(year, month):
     return [normalize_event(row) for row in rows]
 
 
-def get_event(event_id):
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("""
-        SELECT id, start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time
-        FROM events
-        WHERE id = %s;
-    """, (event_id,))
-    row = cur.fetchone()
-    conn.close()
+    def get_event(event_id):
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT id, start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time
+            FROM events
+            WHERE id = %s;
+        """, (event_id,))
+        row = cur.fetchone()
+        conn.close()
 
-    return normalize_event(row) if row else None
-
-
-def build_events_by_date(events):
-    result = {}
-    for event in events:
-        try:
-            start = parse_date(event["start_date"])
-            end = parse_date(event["end_date"])
-        except Exception:
-            continue
-
-        for d in date_range(start, end):
-            result.setdefault(d.strftime("%Y-%m-%d"), []).append(event)
-
-    return result
+        return normalize_event(row) if row else None
 
 
-def notify_all_devices(event):
-    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
-        print("VAPID keys are not set. Skip push notification.")
-        return
+    def build_events_by_date(events):
+        result = {}
+        for event in events:
+            try:
+                start = parse_date(event["start_date"])
+                end = parse_date(event["end_date"])
+            except Exception:
+                continue
 
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT id, subscription FROM push_subscriptions;")
-    subs = cur.fetchall()
+            for d in date_range(start, end):
+                result.setdefault(d.strftime("%Y-%m-%d"), []).append(event)
+
+        return result
+
+
+    def notify_all_devices(event):
+        if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+            print("VAPID keys are not set. Skip push notification.")
+            return
+
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT id, subscription FROM push_subscriptions;")
+        subs = cur.fetchall()
+
+    date_text = event.get("start_date", "")
+    if event.get("end_date") and event.get("end_date") != event.get("start_date"):
+        date_text = f"{event.get('start_date')}〜{event.get('end_date')}"
+
+    time_text = ""
+    if event.get("start_time"):
+        time_text = event.get("start_time")
+        if event.get("end_time"):
+            time_text += f"〜{event.get('end_time')}"
+
+    body_lines = [
+        f"📅 {date_text}",
+        f"📝 {event.get('title', '')}",
+    ]
+
+    if time_text:
+        body_lines.append(f"🕒 {time_text}")
+
+    if event.get("owner"):
+        body_lines.append(f"👤 {event.get('owner')}")
+
+    if event.get("location"):
+        body_lines.append(f"📍 {event.get('location')}")
 
     payload = {
         "title": "予定が追加されました",
-        "body": f"{event['start_date']} {event['title']}\n{event.get('owner','')} / {event.get('location','')}",
+        "body": "\n".join(body_lines),
         "url": "/calendar"
     }
 

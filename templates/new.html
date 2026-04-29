@@ -3,46 +3,27 @@
 <head>
   <meta charset="utf-8">
   <title>予定追加</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="apple-touch-icon" href="/static/icon.png">
-  
-  <link rel="manifest" href="/static/manifest.json">
-  <link rel="apple-touch-icon" href="/static/icon.png">
-  <meta name="theme-color" content="#3b82f6">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="共有カレンダー">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
 <div class="app">
+
   <section class="card">
-    <h1 class="section-title">予定追加</h1>
+    <h2>予定追加</h2>
 
     <form class="form-grid" action="/add" method="post">
+
       <div>
         <label>開始日</label>
-        <input name="start_date" type="date" value="{{ selected_date }}" required>
+        <input type="date" name="start_date" value="{{ selected_date }}" required>
       </div>
 
       <div>
         <label>終了日</label>
-        <input name="end_date" type="date" value="{{ selected_date }}">
-      </div>
-
-      <div>
-        <label>誰の予定？</label>
-        <div class="owner-buttons">
-          <input class="owner-radio" type="radio" id="owner_maki_new" name="owner" value="まき" checked>
-          <label class="owner-label maki" for="owner_maki_new">まき</label>
-
-          <input class="owner-radio" type="radio" id="owner_ryota_new" name="owner" value="亮太">
-          <label class="owner-label ryota" for="owner_ryota_new">亮太</label>
-
-          <input class="owner-radio" type="radio" id="owner_both_new" name="owner" value="二人">
-          <label class="owner-label both" for="owner_both_new">二人</label>
-        </div>
+        <input type="date" name="end_date" value="{{ selected_date }}">
       </div>
 
       <div>
@@ -54,50 +35,24 @@
         <label>タグ</label>
         <select name="tag">
           {% for tag in tags %}
-            <option value="{{ tag }}">{{ tag }}</option>
+          <option>{{ tag }}</option>
           {% endfor %}
         </select>
       </div>
 
       <div>
-        <label>開始時間</label>
-        <div class="time-row">
-          <select name="start_hour">
-            <option value="">--</option>
-            {% for h in hours %}
-              <option value="{{ h }}">{{ h }}</option>
-            {% endfor %}
-          </select>
-          <span>時</span>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
 
-          <select name="start_minute">
-            <option value="">--</option>
-            {% for m in minutes %}
-              <option value="{{ m }}">{{ m }}</option>
-            {% endfor %}
-          </select>
-          <span>分</span>
-        </div>
-      </div>
+          <input type="radio" id="m" name="owner" value="まき" checked>
+          <label for="m" class="owner-label maki">まき</label>
 
-      <div>
-        <label>終了時間</label>
-        <div class="time-row">
-          <select name="end_hour">
-            <option value="">--</option>
-            {% for h in hours %}
-              <option value="{{ h }}">{{ h }}</option>
-            {% endfor %}
-          </select>
-          <span>時</span>
+          <input type="radio" id="r" name="owner" value="亮太">
+          <label for="r" class="owner-label ryota">亮太</label>
 
-          <select name="end_minute">
-            <option value="">--</option>
-            {% for m in minutes %}
-              <option value="{{ m }}">{{ m }}</option>
-            {% endfor %}
-          </select>
-          <span>分</span>
+          <input type="radio" id="b" name="owner" value="二人">
+          <label for="b" class="owner-label both">二人</label>
+
         </div>
       </div>
 
@@ -116,11 +71,11 @@
         <input name="url">
       </div>
 
-      <button class="btn" type="submit">予定を追加</button>
-    </form>
+      <button class="btn">追加</button>
 
-    <a class="back" href="/calendar">戻る</a>
+    </form>
   </section>
+
 </div>
 </body>
 </html>

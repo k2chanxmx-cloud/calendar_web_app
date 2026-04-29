@@ -252,9 +252,28 @@ textarea {
   誰の予定ボタン
 ========================= */
 .owner-buttons {
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:8px;
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.owner-label {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #eee;
+  cursor: pointer;
+}
+
+.owner-label.maki { background:#fca5a5; }
+.owner-label.ryota { background:#fdba74; }
+.owner-label.both { background:#c4b5fd; }
+
+input[type="radio"] {
+  display: none;
+}
+
+input[type="radio"]:checked + .owner-label {
+  outline: 2px solid #333;
 }
 
 .owner-radio {
@@ -499,4 +518,8 @@ textarea {
   padding:10px;
   border-radius:16px;
   margin-bottom:10px;
+}
+.push-enabled {
+  background:#22c55e;
+  color:#ffffff;
 }
