@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor, Json
 from pywebpush import webpush, WebPushException
+
 from flask import (
     Flask,
     request,
@@ -19,7 +20,7 @@ from flask import (
 )
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret")
+app.secret_key = os.environ.get("SECRET_KEY", "secret")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 PASSWORD = os.environ.get("APP_PASSWORD", "1234")
@@ -35,9 +36,8 @@ HOURS = [f"{h:02d}" for h in range(24)]
 MINUTES = ["00", "15", "30", "45"]
 
 
+# ---------------- DB ----------------
 def get_conn():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL が設定されていません")
     return psycopg2.connect(DATABASE_URL)
 
 
@@ -46,29 +46,27 @@ def init_db():
     cur = conn.cursor()
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS events (
-            id BIGSERIAL PRIMARY KEY,
-            start_date DATE NOT NULL,
-            end_date DATE NOT NULL,
-            title TEXT NOT NULL,
-            tag TEXT,
-            owner TEXT,
-            location TEXT,
-            memo TEXT,
-            url TEXT,
-            start_time TEXT,
-            end_time TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        );
+    CREATE TABLE IF NOT EXISTS events (
+        id BIGSERIAL PRIMARY KEY,
+        start_date DATE,
+        end_date DATE,
+        title TEXT,
+        tag TEXT,
+        owner TEXT,
+        location TEXT,
+        memo TEXT,
+        url TEXT,
+        start_time TEXT,
+        end_time TEXT
+    );
     """)
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS push_subscriptions (
-            id BIGSERIAL PRIMARY KEY,
-            endpoint TEXT UNIQUE NOT NULL,
-            subscription JSONB NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        );
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id BIGSERIAL PRIMARY KEY,
+        endpoint TEXT UNIQUE,
+        subscription JSONB
+    );
     """)
 
     conn.commit()
@@ -78,229 +76,101 @@ def init_db():
 init_db()
 
 
+# ---------------- 共通 ----------------
 def login_required():
-    return session.get("login") is True
+    return session.get("login")
 
 
-def make_time(hour, minute):
-    return f"{hour}:{minute}" if hour and minute else ""
-
-
-def split_time(value):
-    if value and ":" in value:
-        return value.split(":", 1)
-    return "", ""
-
-
-def parse_date(value):
-    if isinstance(value, date):
-        return value
-    return datetime.strptime(str(value), "%Y-%m-%d").date()
+def parse_date(v):
+    if isinstance(v, date):
+        return v
+    return datetime.strptime(str(v), "%Y-%m-%d").date()
 
 
 def date_range(start, end):
-    current = start
-    while current <= end:
-        yield current
-        current += timedelta(days=1)
+    d = start
+    while d <= end:
+        yield d
+        d += timedelta(days=1)
 
 
-def get_japanese_holidays(year):
-    fixed = [(1,1),(2,11),(2,23),(4,29),(5,3),(5,4),(5,5),(8,11),(11,3),(11,23)]
-    return {f"{year}-{m:02d}-{d:02d}" for m, d in fixed}
+def build_events_by_date(events):
+    result = {}
+    for ev in events:
+        try:
+            s = parse_date(ev["start_date"])
+            e = parse_date(ev["end_date"])
+        except:
+            continue
+
+        for d in date_range(s, e):
+            key = d.strftime("%Y-%m-%d")
+            result.setdefault(key, []).append(ev)
+
+    return result
 
 
-def normalize_event(row):
-    start_date = row.get("start_date")
-    end_date = row.get("end_date") or start_date
-
-    if isinstance(start_date, date):
-        start_date = start_date.strftime("%Y-%m-%d")
-    if isinstance(end_date, date):
-        end_date = end_date.strftime("%Y-%m-%d")
-
-    start_time = row.get("start_time") or ""
-    end_time = row.get("end_time") or ""
-
-    start_hour, start_minute = split_time(start_time)
-    end_hour, end_minute = split_time(end_time)
-
-    return {
-        "id": row.get("id"),
-        "start_date": start_date,
-        "end_date": end_date,
-        "title": row.get("title") or "",
-        "tag": row.get("tag") or "",
-        "owner": row.get("owner") or "まき",
-        "location": row.get("location") or "",
-        "memo": row.get("memo") or "",
-        "url": row.get("url") or "",
-        "start_time": start_time,
-        "end_time": end_time,
-        "start_hour": start_hour,
-        "start_minute": start_minute,
-        "end_hour": end_hour,
-        "end_minute": end_minute,
-    }
-
-
-def get_month_events(year, month):
-    month_start = date(year, month, 1)
-    month_end = date(year, month, calendar.monthrange(year, month)[1])
-
+# ---------------- 通知 ----------------
+def notify_all(event):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("""
-        SELECT id, start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time
-        FROM events
-        WHERE start_date <= %s AND end_date >= %s
-        ORDER BY start_date ASC, start_time ASC NULLS LAST, id ASC;
-    """, (month_end, month_start))
-    rows = cur.fetchall()
-    conn.close()
 
-    return [normalize_event(row) for row in rows]
+    cur.execute("SELECT id, subscription FROM push_subscriptions")
+    subs = cur.fetchall()
 
-
-    def get_event(event_id):
-        conn = get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT id, start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time
-            FROM events
-            WHERE id = %s;
-        """, (event_id,))
-        row = cur.fetchone()
-        conn.close()
-
-        return normalize_event(row) if row else None
-
-
-    def build_events_by_date(events):
-        result = {}
-        for event in events:
-            try:
-                start = parse_date(event["start_date"])
-                end = parse_date(event["end_date"])
-            except Exception:
-                continue
-
-            for d in date_range(start, end):
-                result.setdefault(d.strftime("%Y-%m-%d"), []).append(event)
-
-        return result
-
-
-    def notify_all_devices(event):
-        if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
-            print("VAPID keys are not set. Skip push notification.")
-            return
-
-        conn = get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT id, subscription FROM push_subscriptions;")
-        subs = cur.fetchall()
-
-    date_text = event.get("start_date", "")
-    if event.get("end_date") and event.get("end_date") != event.get("start_date"):
-        date_text = f"{event.get('start_date')}〜{event.get('end_date')}"
-
-    time_text = ""
-    if event.get("start_time"):
-        time_text = event.get("start_time")
-        if event.get("end_time"):
-            time_text += f"〜{event.get('end_time')}"
-
-    body_lines = [
-        f"📅 {date_text}",
-        f"📝 {event.get('title', '')}",
-    ]
-
-    if time_text:
-        body_lines.append(f"🕒 {time_text}")
-
-    if event.get("owner"):
-        body_lines.append(f"👤 {event.get('owner')}")
-
+    # 👇 リッチ通知
+    body = f"📅 {event['start_date']}\n📝 {event['title']}"
     if event.get("location"):
-        body_lines.append(f"📍 {event.get('location')}")
+        body += f"\n📍 {event['location']}"
+    if event.get("owner"):
+        body += f"\n👤 {event['owner']}"
 
-    payload = {
-        "title": "予定が追加されました",
-        "body": "\n".join(body_lines),
+    payload = json.dumps({
+        "title": "予定追加",
+        "body": body,
         "url": "/calendar"
-    }
+    }, ensure_ascii=False)
 
-    expired_ids = []
-
-    for sub in subs:
+    for s in subs:
         try:
             webpush(
-                subscription_info=sub["subscription"],
-                data=json.dumps(payload, ensure_ascii=False),
+                subscription_info=s["subscription"],
+                data=payload,
                 vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": VAPID_SUBJECT},
             )
-        except WebPushException as e:
-            print("Push failed:", repr(e))
-            if getattr(e.response, "status_code", None) in [404, 410]:
-                expired_ids.append(sub["id"])
-        except Exception as e:
-            print("Push error:", repr(e))
-
-    for sid in expired_ids:
-        cur.execute("DELETE FROM push_subscriptions WHERE id = %s;", (sid,))
+        except WebPushException:
+            cur.execute("DELETE FROM push_subscriptions WHERE id=%s", (s["id"],))
 
     conn.commit()
     conn.close()
 
 
-@app.route("/sw.js")
-def service_worker():
-    response = make_response(send_from_directory("static", "sw.js"))
-    response.headers["Content-Type"] = "application/javascript"
-    response.headers["Cache-Control"] = "no-cache"
-    return response
-
-
-@app.route("/", methods=["GET", "POST"])
-def login():
-    if login_required():
-        return redirect(url_for("calendar_view"))
-
-    error = ""
-    if request.method == "POST":
-        if request.form.get("pw") == PASSWORD:
-            session["login"] = True
-            return redirect(url_for("calendar_view"))
-        error = "パスワードが違います"
-
-    return render_template("login.html", error=error)
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
+# ---------------- ルーティング ----------------
+@app.route("/")
+def root():
+    return redirect("/calendar")
 
 
 @app.route("/calendar")
 def calendar_view():
     if not login_required():
-        return redirect(url_for("login"))
+        return redirect("/login")
 
     today = date.today()
     year = int(request.args.get("year", today.year))
     month = int(request.args.get("month", today.month))
 
-    if month < 1:
-        year -= 1
-        month = 12
-    elif month > 12:
-        year += 1
-        month = 1
+    cal = calendar.Calendar(firstweekday=6)
+    weeks = cal.monthdatescalendar(year, month)
 
-    events = get_month_events(year, month)
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    cur.execute("SELECT * FROM events")
+    events = cur.fetchall()
+    conn.close()
+
     events_by_date = build_events_by_date(events)
 
     return render_template(
@@ -308,117 +178,56 @@ def calendar_view():
         year=year,
         month=month,
         today=today,
-        weeks=calendar.Calendar(firstweekday=6).monthdatescalendar(year, month),
+        weeks=weeks,
         events_by_date=events_by_date,
-        maki_events=[e for e in events if e["owner"] == "まき"],
-        ryota_events=[e for e in events if e["owner"] == "亮太"],
-        both_events=[e for e in events if e["owner"] == "二人"],
-        prev_year=year if month > 1 else year - 1,
-        prev_month=month - 1 if month > 1 else 12,
-        next_year=year if month < 12 else year + 1,
-        next_month=month + 1 if month < 12 else 1,
         tags=TAGS,
-        owners=OWNERS,
-        hours=HOURS,
-        minutes=MINUTES,
-        holidays=get_japanese_holidays(year),
         vapid_public_key=VAPID_PUBLIC_KEY,
-    )
-
-
-@app.route("/new")
-def new_event():
-    if not login_required():
-        return redirect(url_for("login"))
-
-    return render_template(
-        "new.html",
-        selected_date=request.args.get("date", date.today().strftime("%Y-%m-%d")),
-        tags=TAGS,
-        owners=OWNERS,
-        hours=HOURS,
-        minutes=MINUTES
     )
 
 
 @app.route("/add", methods=["POST"])
 def add():
-    if not login_required():
-        return redirect(url_for("login"))
-
-    start_date = request.form.get("start_date", "").strip()
-    end_date = request.form.get("end_date", "").strip() or start_date
-    title = request.form.get("title", "").strip()
-    tag = request.form.get("tag", "").strip()
-    owner = request.form.get("owner", "まき").strip()
-    location = request.form.get("location", "").strip()
-    memo = request.form.get("memo", "").strip()
-    url = request.form.get("url", "").strip()
-
-    start_time = make_time(request.form.get("start_hour", "").strip(), request.form.get("start_minute", "").strip())
-    end_time = make_time(request.form.get("end_hour", "").strip(), request.form.get("end_minute", "").strip())
-
-    if owner not in OWNERS:
-        owner = "まき"
-
-    if not start_date or not title:
-        return redirect(url_for("calendar_view"))
-
-    try:
-        if parse_date(end_date) < parse_date(start_date):
-            end_date = start_date
-    except Exception:
-        end_date = start_date
-
     conn = get_conn()
     cur = conn.cursor()
+
+    data = dict(request.form)
+
     cur.execute("""
-        INSERT INTO events (start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id;
-    """, (start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time))
-    event_id = cur.fetchone()[0]
+    INSERT INTO events (start_date,end_date,title,tag,owner,location,memo,url)
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        data.get("start_date"),
+        data.get("end_date"),
+        data.get("title"),
+        data.get("tag"),
+        data.get("owner"),
+        data.get("location"),
+        data.get("memo"),
+        data.get("url"),
+    ))
+
     conn.commit()
     conn.close()
 
-    event = {
-        "id": event_id,
-        "start_date": start_date,
-        "end_date": end_date,
-        "title": title,
-        "tag": tag,
-        "owner": owner,
-        "location": location,
-        "memo": memo,
-        "url": url,
-        "start_time": start_time,
-        "end_time": end_time,
-    }
+    notify_all(data)
 
-    notify_all_devices(event)
-
-    y, m, _ = start_date.split("-")
-    return redirect(url_for("calendar_view", year=int(y), month=int(m)))
+    return redirect("/calendar")
 
 
 @app.route("/subscribe", methods=["POST"])
 def subscribe():
-    if not login_required():
-        return jsonify({"ok": False, "error": "not logged in"}), 401
-
-    subscription = request.get_json()
-
-    if not subscription or "endpoint" not in subscription:
-        return jsonify({"ok": False, "error": "invalid subscription"}), 400
+    sub = request.get_json()
 
     conn = get_conn()
     cur = conn.cursor()
+
     cur.execute("""
-        INSERT INTO push_subscriptions (endpoint, subscription)
-        VALUES (%s, %s)
-        ON CONFLICT (endpoint)
-        DO UPDATE SET subscription = EXCLUDED.subscription;
-    """, (subscription["endpoint"], Json(subscription)))
+    INSERT INTO push_subscriptions (endpoint, subscription)
+    VALUES (%s,%s)
+    ON CONFLICT (endpoint)
+    DO UPDATE SET subscription=EXCLUDED.subscription
+    """, (sub["endpoint"], Json(sub)))
+
     conn.commit()
     conn.close()
 
@@ -426,73 +235,42 @@ def subscribe():
 
 
 @app.route("/test-notification", methods=["POST"])
-def test_notification():
-    if not login_required():
-        return jsonify({"ok": False}), 401
-
-    notify_all_devices({
-        "start_date": date.today().strftime("%Y-%m-%d"),
+def test():
+    notify_all({
+        "start_date": str(date.today()),
         "title": "テスト通知",
         "owner": "",
         "location": ""
     })
-
     return jsonify({"ok": True})
 
 
-@app.route("/edit/<int:event_id>", methods=["GET", "POST"])
-def edit(event_id):
-    if not login_required():
-        return redirect(url_for("login"))
+@app.route("/sw.js")
+def sw():
+    return send_from_directory("static", "sw.js")
 
-    event = get_event(event_id)
-    if not event:
-        return redirect(url_for("calendar_view"))
 
+# ---------------- ログイン ----------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
     if request.method == "POST":
-        start_date = request.form.get("start_date", "").strip()
-        end_date = request.form.get("end_date", "").strip() or start_date
-        title = request.form.get("title", "").strip()
-        tag = request.form.get("tag", "").strip()
-        owner = request.form.get("owner", "まき").strip()
-        location = request.form.get("location", "").strip()
-        memo = request.form.get("memo", "").strip()
-        url = request.form.get("url", "").strip()
-
-        start_time = make_time(request.form.get("start_hour", "").strip(), request.form.get("start_minute", "").strip())
-        end_time = make_time(request.form.get("end_hour", "").strip(), request.form.get("end_minute", "").strip())
-
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE events
-            SET start_date=%s, end_date=%s, title=%s, tag=%s, owner=%s,
-                location=%s, memo=%s, url=%s, start_time=%s, end_time=%s
-            WHERE id=%s;
-        """, (start_date, end_date, title, tag, owner, location, memo, url, start_time, end_time, event_id))
-        conn.commit()
-        conn.close()
-
-        y, m, _ = start_date.split("-")
-        return redirect(url_for("calendar_view", year=int(y), month=int(m)))
-
-    return render_template("edit.html", event=event, tags=TAGS, owners=OWNERS, hours=HOURS, minutes=MINUTES)
+        if request.form.get("pw") == PASSWORD:
+            session["login"] = True
+            return redirect("/calendar")
+    return """
+    <form method="post">
+      <input name="pw">
+      <button>ログイン</button>
+    </form>
+    """
 
 
-@app.route("/delete/<int:event_id>", methods=["POST"])
-def delete(event_id):
-    if not login_required():
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM events WHERE id=%s;", (event_id,))
-    conn.commit()
-    conn.close()
-
-    return redirect(request.referrer or url_for("calendar_view"))
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
+# ---------------- 起動 ----------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run()
