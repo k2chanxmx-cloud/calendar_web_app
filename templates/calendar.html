@@ -5,11 +5,12 @@
   <title>共有カレンダー</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- PWA -->
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icon.png">
   <meta name="theme-color" content="#3b82f6">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="共有カレンダー">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -17,7 +18,6 @@
 <body>
 <div class="app">
 
-  <!-- ヘッダー -->
   <section class="card header">
     <div class="top-row">
       <div class="app-title">まきと亮太のカレンダー</div>
@@ -31,7 +31,6 @@
     </div>
   </section>
 
-  <!-- カレンダー -->
   <section class="card">
     <div class="weekdays">
       <div class="sun">日</div>
@@ -44,80 +43,201 @@
     </div>
 
     {% for week in weeks %}
-    <div class="week">
-      {% for d in week %}
-        {% set ds = d.strftime("%Y-%m-%d") %}
-        <a class="day-link" href="/new?date={{ ds }}">
-          <div class="day
-            {% if d.month != month %}other{% endif %}
-            {% if d == today %}today{% endif %}
-            {% if ds in events_by_date %}has{% endif %}
-            {% if ds in holidays %}holiday{% endif %}
-          ">
-            <span>{{ d.day }}</span>
+      <div class="week">
+        {% for d in week %}
+          {% set ds = d.strftime("%Y-%m-%d") %}
+          <a class="day-link" href="/new?date={{ ds }}">
+            <div class="
+              day
+              {% if d.month != month %}other{% endif %}
+              {% if d == today %}today{% endif %}
+              {% if ds in events_by_date %}has{% endif %}
+              {% if ds in holidays %}holiday{% endif %}
+            ">
+              <span>{{ d.day }}</span>
 
-            {% if ds in events_by_date %}
-            <div class="dot-row">
-              {% set ns = namespace(m=false,r=false,b=false) %}
-              {% for ev in events_by_date[ds] %}
-                {% if ev.owner == "まき" %}{% set ns.m=true %}{% endif %}
-                {% if ev.owner == "亮太" %}{% set ns.r=true %}{% endif %}
-                {% if ev.owner == "二人" %}{% set ns.b=true %}{% endif %}
-              {% endfor %}
+              {% if ds in events_by_date %}
+                <div class="dot-row">
+                  {% set ns = namespace(has_maki=false, has_ryota=false, has_both=false) %}
 
-              {% if ns.m %}<span class="dot dot-maki"></span>{% endif %}
-              {% if ns.r %}<span class="dot dot-ryota"></span>{% endif %}
-              {% if ns.b %}<span class="dot dot-both"></span>{% endif %}
+                  {% for ev in events_by_date[ds] %}
+                    {% if ev.owner == "まき" %}
+                      {% set ns.has_maki = true %}
+                    {% elif ev.owner == "亮太" %}
+                      {% set ns.has_ryota = true %}
+                    {% elif ev.owner == "二人" %}
+                      {% set ns.has_both = true %}
+                    {% endif %}
+                  {% endfor %}
+
+                  {% if ns.has_maki %}
+                    <span class="dot dot-maki"></span>
+                  {% endif %}
+                  {% if ns.has_ryota %}
+                    <span class="dot dot-ryota"></span>
+                  {% endif %}
+                  {% if ns.has_both %}
+                    <span class="dot dot-both"></span>
+                  {% endif %}
+                </div>
+              {% endif %}
             </div>
-            {% endif %}
-          </div>
-        </a>
-      {% endfor %}
-    </div>
+          </a>
+        {% endfor %}
+      </div>
     {% endfor %}
   </section>
 
-  <!-- 予定追加 -->
   <section class="card">
-    <h2>予定追加</h2>
+    <h2 class="section-title">予定追加</h2>
 
-    <form action="/add" method="post">
-      <input name="start_date" type="date" required>
-      <input name="end_date" type="date">
-
-      <input name="title" placeholder="タイトル" required>
-
-      <select name="tag">
-        {% for tag in tags %}
-        <option>{{ tag }}</option>
-        {% endfor %}
-      </select>
-
+    <form class="form-grid" action="/add" method="post">
       <div>
-        <label><input type="radio" name="owner" value="まき" checked>まき</label>
-        <label><input type="radio" name="owner" value="亮太">亮太</label>
-        <label><input type="radio" name="owner" value="二人">二人</label>
+        <label>開始日</label>
+        <input name="start_date" type="date" required>
       </div>
 
-      <input name="location" placeholder="場所">
-      <textarea name="memo" placeholder="メモ"></textarea>
-      <input name="url" placeholder="URL">
+      <div>
+        <label>終了日</label>
+        <input name="end_date" type="date">
+      </div>
 
-      <button class="btn">追加</button>
+      <div>
+        <label>誰の予定？</label>
+        <div class="owner-buttons">
+          <input class="owner-radio" type="radio" id="owner_maki_main" name="owner" value="まき" checked>
+          <label class="owner-label maki" for="owner_maki_main">まき</label>
+
+          <input class="owner-radio" type="radio" id="owner_ryota_main" name="owner" value="亮太">
+          <label class="owner-label ryota" for="owner_ryota_main">亮太</label>
+
+          <input class="owner-radio" type="radio" id="owner_both_main" name="owner" value="二人">
+          <label class="owner-label both" for="owner_both_main">二人</label>
+        </div>
+      </div>
+
+      <div>
+        <label>タイトル</label>
+        <input name="title" required>
+      </div>
+
+      <div>
+        <label>タグ</label>
+        <select name="tag">
+          {% for tag in tags %}
+            <option value="{{ tag }}">{{ tag }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label>開始時間</label>
+        <div class="time-row">
+          <select name="start_hour">
+            <option value="">--</option>
+            {% for h in hours %}
+              <option value="{{ h }}">{{ h }}</option>
+            {% endfor %}
+          </select>
+          <span>時</span>
+
+          <select name="start_minute">
+            <option value="">--</option>
+            {% for m in minutes %}
+              <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span>分</span>
+        </div>
+      </div>
+
+      <div>
+        <label>終了時間</label>
+        <div class="time-row">
+          <select name="end_hour">
+            <option value="">--</option>
+            {% for h in hours %}
+              <option value="{{ h }}">{{ h }}</option>
+            {% endfor %}
+          </select>
+          <span>時</span>
+
+          <select name="end_minute">
+            <option value="">--</option>
+            {% for m in minutes %}
+              <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span>分</span>
+        </div>
+      </div>
+
+      <div>
+        <label>場所</label>
+        <input name="location">
+      </div>
+
+      <div>
+        <label>メモ</label>
+        <textarea name="memo"></textarea>
+      </div>
+
+      <div>
+        <label>URL</label>
+        <input name="url">
+      </div>
+
+      <button class="btn" type="submit">予定を追加</button>
     </form>
   </section>
 
-  <!-- 通知（最下部） -->
   <section class="card">
-    <h2>通知設定</h2>
+    <h2 class="section-title">今月の予定</h2>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active maki" onclick="showTab('maki')">まき</button>
+      <button type="button" class="tab-btn ryota" onclick="showTab('ryota')">亮太</button>
+      <button type="button" class="tab-btn both" onclick="showTab('both')">二人</button>
+    </div>
+
+    <div id="tab-maki" class="tab-panel active">
+      {% if not maki_events %}
+        <div class="empty">まきの予定はまだありません</div>
+      {% endif %}
+      {% for event in maki_events %}
+        {% include "_event_card.html" %}
+      {% endfor %}
+    </div>
+
+    <div id="tab-ryota" class="tab-panel">
+      {% if not ryota_events %}
+        <div class="empty">亮太の予定はまだありません</div>
+      {% endif %}
+      {% for event in ryota_events %}
+        {% include "_event_card.html" %}
+      {% endfor %}
+    </div>
+
+    <div id="tab-both" class="tab-panel">
+      {% if not both_events %}
+        <div class="empty">二人の予定はまだありません</div>
+      {% endif %}
+      {% for event in both_events %}
+        {% include "_event_card.html" %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">通知設定</h2>
     <p class="desc">予定が追加されると通知が届きます</p>
 
-    <button id="pushButton" class="btn" onclick="enablePushNotification()">
+    <button id="pushButton" class="btn" type="button" onclick="enablePushNotification()">
       通知を有効にする
     </button>
 
-    <button class="btn secondary-btn" onclick="sendTestPush()">
-      テスト通知
+    <button class="btn secondary-btn" type="button" onclick="sendTestPush()">
+      テスト通知を送る
     </button>
   </section>
 
@@ -126,55 +246,115 @@
 <script>
 const VAPID_PUBLIC_KEY = {{ vapid_public_key|tojson }};
 
+function showTab(name) {
+  document.querySelectorAll(".tab-panel").forEach(panel => {
+    panel.classList.remove("active");
+  });
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.remove("active");
+  });
+
+  document.getElementById("tab-" + name).classList.add("active");
+  document.querySelector(".tab-btn." + name).classList.add("active");
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
 }
 
 async function enablePushNotification() {
+  if (!("serviceWorker" in navigator)) {
+    alert("この端末は通知に対応していません");
+    return;
+  }
+
+  if (!("PushManager" in window)) {
+    alert("Push通知に対応していません");
+    return;
+  }
+
+  if (!VAPID_PUBLIC_KEY) {
+    alert("通知キーが未設定です");
+    return;
+  }
+
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") return alert("通知が許可されていません");
 
-  const reg = await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
+  if (permission !== "granted") {
+    alert("通知が許可されませんでした");
+    return;
+  }
 
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
+  const registration = await navigator.serviceWorker.ready;
+
+  let subscription = await registration.pushManager.getSubscription();
+
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
   }
 
-  await fetch("/subscribe", {
+  const res = await fetch("/subscribe", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(sub)
+    body: JSON.stringify(subscription)
   });
 
-  localStorage.setItem("pushEnabled", "true");
-  updatePushButton();
-  alert("通知ON");
+  if (res.ok) {
+    localStorage.setItem("pushEnabled", "true");
+    updatePushButton();
+    alert("通知ON");
+  } else {
+    alert("通知登録に失敗しました");
+  }
 }
 
 async function sendTestPush() {
-  await fetch("/test-notification", {method:"POST"});
+  const res = await fetch("/test-notification", {
+    method: "POST"
+  });
+
+  if (res.ok) {
+    alert("テスト通知を送信しました");
+  } else {
+    alert("テスト通知に失敗しました");
+  }
 }
 
 function updatePushButton() {
   const btn = document.getElementById("pushButton");
-  if (localStorage.getItem("pushEnabled") === "true") {
+  if (!btn) return;
+
+  const enabled = localStorage.getItem("pushEnabled") === "true";
+
+  if (enabled && Notification.permission === "granted") {
     btn.textContent = "通知ON";
     btn.classList.add("push-enabled");
+  } else {
+    btn.textContent = "通知を有効にする";
+    btn.classList.remove("push-enabled");
   }
 }
 
-window.onload = updatePushButton;
+window.addEventListener("load", function () {
+  updatePushButton();
 
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js");
-}
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js");
+  }
+});
 </script>
 
 </body>
