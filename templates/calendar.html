@@ -4,9 +4,17 @@
   <meta charset="utf-8">
   <title>共有カレンダー</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icon.png">
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="共有カレンダー">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
   <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
 <div class="app">
 
@@ -48,33 +56,33 @@
             ">
               <span>{{ d.day }}</span>
 
-				{% if ds in events_by_date %}
-				  <div class="dot-row">
-				    {% set ns = namespace(has_maki=false, has_ryota=false, has_both=false) %}
+              {% if ds in events_by_date %}
+                <div class="dot-row">
+                  {% set ns = namespace(has_maki=false, has_ryota=false, has_both=false) %}
 
-				    {% for ev in events_by_date[ds] %}
-				      {% if ev.owner == "まき" %}
-				        {% set ns.has_maki = true %}
-				      {% elif ev.owner == "亮太" %}
-				        {% set ns.has_ryota = true %}
-				      {% elif ev.owner == "二人" %}
-				        {% set ns.has_both = true %}
-				      {% endif %}
-				    {% endfor %}
+                  {% for ev in events_by_date[ds] %}
+                    {% if ev.owner == "まき" %}
+                      {% set ns.has_maki = true %}
+                    {% elif ev.owner == "亮太" %}
+                      {% set ns.has_ryota = true %}
+                    {% elif ev.owner == "二人" %}
+                      {% set ns.has_both = true %}
+                    {% endif %}
+                  {% endfor %}
 
-				    {% if ns.has_maki %}
-				      <span class="dot dot-maki"></span>
-				    {% endif %}
+                  {% if ns.has_maki %}
+                    <span class="dot dot-maki"></span>
+                  {% endif %}
 
-				    {% if ns.has_ryota %}
-				      <span class="dot dot-ryota"></span>
-				    {% endif %}
+                  {% if ns.has_ryota %}
+                    <span class="dot dot-ryota"></span>
+                  {% endif %}
 
-				    {% if ns.has_both %}
-				      <span class="dot dot-both"></span>
-				    {% endif %}
-				  </div>
-				{% endif %}
+                  {% if ns.has_both %}
+                    <span class="dot dot-both"></span>
+                  {% endif %}
+                </div>
+              {% endif %}
             </div>
           </a>
         {% endfor %}
@@ -134,6 +142,7 @@
             {% endfor %}
           </select>
           <span>時</span>
+
           <select name="start_minute">
             <option value="">--</option>
             {% for m in minutes %}
@@ -154,6 +163,7 @@
             {% endfor %}
           </select>
           <span>時</span>
+
           <select name="end_minute">
             <option value="">--</option>
             {% for m in minutes %}
@@ -237,6 +247,18 @@ function showTab(name) {
 
   document.getElementById("tab-" + name).classList.add("active");
   document.querySelector(".tab-btn." + name).classList.add("active");
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("/sw.js")
+      .then(function () {
+        console.log("Service Worker registered");
+      })
+      .catch(function (error) {
+        console.log("Service Worker registration failed:", error);
+      });
+  });
 }
 </script>
 </body>

@@ -4,7 +4,16 @@ from datetime import date, datetime, timedelta
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flask import Flask, request, redirect, session, render_template, url_for
+from flask import (
+    Flask,
+    request,
+    redirect,
+    session,
+    render_template,
+    url_for,
+    send_from_directory,
+    make_response,
+)
 
 
 app = Flask(__name__)
@@ -237,6 +246,14 @@ def build_events_by_date(events):
             result.setdefault(key, []).append(event)
 
     return result
+
+
+@app.route("/sw.js")
+def service_worker():
+    response = make_response(send_from_directory("static", "sw.js"))
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.route("/", methods=["GET", "POST"])

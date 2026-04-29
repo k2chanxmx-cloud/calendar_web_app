@@ -1,0 +1,19 @@
+{
+  "name": "まきと亮太のカレンダー",
+  "short_name": "共有カレンダー",
+  "description": "まきと亮太の予定共有カレンダー",
+  "start_url": "/calendar",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
