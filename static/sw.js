@@ -1,4 +1,4 @@
-const CACHE_NAME = "maki-ryota-calendar-v1";
+const CACHE_NAME = "maki-ryota-calendar-v2";
 
 const CACHE_FILES = [
   "/",
@@ -13,9 +13,7 @@ self.addEventListener("install", event => {
 
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(CACHE_FILES).catch(() => {
-        return Promise.resolve();
-      });
+      return cache.addAll(CACHE_FILES).catch(() => Promise.resolve());
     })
   );
 });
@@ -35,13 +33,44 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") {
-    return;
-  }
+  if (event.request.method !== "GET") return;
 
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
+    fetch(event.request).catch(() => caches.match(event.request))
+  );
+});
+
+self.addEventListener("push", event => {
+  let data = {
+    title: "予定通知",
+    body: "予定が追加されました",
+    url: "/calendar"
+  };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || "予定通知", {
+      body: data.body || "予定が追加されました",
+      icon: "/static/icon.png",
+      badge: "/static/icon.png",
+      data: {
+        url: data.url || "/calendar"
+      }
     })
+  );
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url || "/calendar")
   );
 });

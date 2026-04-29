@@ -188,7 +188,11 @@ body {
 .dot-both {
   background:#8b5cf6;
 }
-
+.secondary-btn {
+  background:#f1f5f9;
+  color:#2563eb;
+  margin-top:8px;
+}
 /* =========================
   フォーム
 ========================= */
