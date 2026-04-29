@@ -274,6 +274,42 @@ def notify_all_devices(event):
     conn.commit()
     conn.close()
 
+def notify_all_devices_custom(title, body, url="/calendar"):
+    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+        return
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT id, subscription FROM push_subscriptions;")
+    subs = cur.fetchall()
+
+    payload = {
+        "title": title,
+        "body": body,
+        "url": url
+    }
+
+    expired_ids = []
+
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info=sub["subscription"],
+                data=json.dumps(payload, ensure_ascii=False),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+            )
+        except WebPushException as e:
+            if getattr(e.response, "status_code", None) in [404, 410]:
+                expired_ids.append(sub["id"])
+        except Exception:
+            pass
+
+    for sid in expired_ids:
+        cur.execute("DELETE FROM push_subscriptions WHERE id = %s;", (sid,))
+
+    conn.commit()
+    conn.close()
 
 @app.route("/sw.js")
 def service_worker():
@@ -617,6 +653,68 @@ def test_notification():
 
     return jsonify({"ok": True})
 
+
+@app.route("/notify-tomorrow")
+def notify_tomorrow():
+    key = request.args.get("key", "")
+    expected_key = os.environ.get("CRON_SECRET_KEY", "")
+
+    if not expected_key or key != expected_key:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    tomorrow = date.today() + timedelta(days=1)
+    tomorrow_key = tomorrow.strftime("%Y-%m-%d")
+
+    events = get_day_events(tomorrow_key)
+
+    if not events:
+        return jsonify({
+            "ok": True,
+            "message": "no events tomorrow",
+            "date": tomorrow_key
+        })
+
+    body_lines = [f"📅 明日の予定：{tomorrow_key}"]
+
+    for event in events:
+        line = f"・{event.get('title', '')}"
+
+        if event.get("start_time"):
+            line += f"（{event.get('start_time')}"
+            if event.get("end_time"):
+                line += f"〜{event.get('end_time')}"
+            line += "）"
+
+        if event.get("owner"):
+            line += f" / {event.get('owner')}"
+
+        if event.get("location"):
+            line += f" / {event.get('location')}"
+
+        body_lines.append(line)
+
+    payload_event = {
+        "start_date": tomorrow_key,
+        "end_date": tomorrow_key,
+        "title": "明日の予定があります",
+        "owner": "",
+        "location": "",
+        "start_time": "",
+        "end_time": "",
+    }
+
+    notify_all_devices_custom(
+        title="明日の予定",
+        body="\n".join(body_lines),
+        url=f"/day/{tomorrow_key}"
+    )
+
+    return jsonify({
+        "ok": True,
+        "notified": True,
+        "date": tomorrow_key,
+        "count": len(events)
+    })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
