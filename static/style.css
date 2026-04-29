@@ -542,3 +542,21 @@ input[type="radio"]:checked + .owner-label {
   background:#22c55e;
   color:#ffffff;
 }
+.app-title {
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.logout-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.logout {
+  white-space: nowrap;
+}
+
+.calendar-nav {
+  margin-bottom: 16px;
+}

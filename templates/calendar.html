@@ -19,15 +19,10 @@
 <div class="app">
 
   <section class="card header">
-    <div class="top-row">
-      <div class="app-title">まきと亮太のカレンダー</div>
-      <a class="logout" href="/logout">ログアウト</a>
-    </div>
+    <div class="app-title">まきと亮太のカレンダー</div>
 
-    <div class="nav">
-      <a href="/calendar?year={{ prev_year }}&month={{ prev_month }}">‹</a>
-      <div class="month">{{ year }}年 {{ month }}月</div>
-      <a href="/calendar?year={{ next_year }}&month={{ next_month }}">›</a>
+    <div class="logout-row">
+      <a class="logout" href="/logout">ログアウト</a>
     </div>
   </section>
 
@@ -43,8 +38,14 @@
     {% endfor %}
   </section>
 
-  <section class="card">
-    <div class="weekdays">
+	<section class="card">
+	  <div class="nav calendar-nav">
+	    <a href="/calendar?year={{ prev_year }}&month={{ prev_month }}">‹</a>
+	    <div class="month">{{ year }}年 {{ month }}月</div>
+	    <a href="/calendar?year={{ next_year }}&month={{ next_month }}">›</a>
+	  </div>
+
+	  <div class="weekdays">
       <div class="sun">日</div>
       <div>月</div>
       <div>火</div>
